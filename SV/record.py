@@ -12,7 +12,8 @@ DEFAULTS = {
   'res': '720p', # 480p | 720p | 1080p | 4k
   'res_choices': ('480p', '720p', '1080p', '4k'),
   'camL': 0,
-  'camR': 1
+  'camR': 1,
+  'show': True
 }
 
 # Set resolution for the video capture
@@ -61,7 +62,7 @@ if __name__ == '__main__':
                     help="Video file to write to", metavar="FILENAME",
                     default=DEFAULTS['filename'])
 
-  parser.add_option("-s", "--size", dest="RES", type="choice",
+  parser.add_option("-d", "--dimensions", dest="RES", type="choice",
                     choices=DEFAULTS['res_choices'],
                     default=DEFAULTS['res'],
                     help="Method to use. Valid choices are {}. Default: %default".format(DEFAULTS['res_choices'])) #, metavar="RES",)
@@ -78,17 +79,19 @@ if __name__ == '__main__':
                     help="Camera ID for RIGHT eye Camera", metavar="RIGHT",
                     default=DEFAULTS['camR'])
 
+  parser.add_option("-s", "--show",
+                    action="store_false", dest="SHOW", default=True,
+                    help="Show recorded frames")
+
   (options, args) = parser.parse_args()
 
   save_path_L, save_path_R = get_LR_filenames(options.FILENAME)
 
   print("Config:")  
   print("Cameras (left/right): {}/{}".format(options.CAM_L, options.CAM_R))
-  print("Out files: {} ({}, {})".format(options.FILENAME,save_path_L, save_path_R))
+  print("Out files (left/right): {}, {}".format(save_path_L, save_path_R))
   print("Resolution: {}".format(options.RES))
   print("FPS: {}".format(options.FPS))
-
-  print("Starting recording, press 'Q' to stop...")
 
   def get_stream(camId, res, fps, filepath):
     cap = cv2.VideoCapture(camId)
@@ -112,23 +115,34 @@ if __name__ == '__main__':
         options.FPS,
         save_path_R))
 
-  while(True):
-      # Capture frame-by-frame
-      # ret, frame = capL.read()
-      for s in streams:
-        s['lastframe'] = s['cap'].read()[1]
+  counter = 0
 
-      # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-      # outL.write(frame)
-      for s in streams:
-        s['writer'].write(s['lastframe'])
+  print("Starting recording, press 'Q' or CTRL+C to stop...")
+  try:
+    while(True):
+        # Capture frame-by-frame
+        # ret, frame = capL.read()
+        for s in streams:
+          s['lastframe'] = s['cap'].read()[1]
 
-      # Display the resulting frame
-      for s in streams:
-        cv2.imshow(s['ID'], s['lastframe'])
+        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # outL.write(frame)
+        for s in streams:
+          s['writer'].write(s['lastframe'])
 
-      if cv2.waitKey(20) & 0xFF == ord('q'):
-          break
+        counter += 1
+        print ("Recorded frame {}".format(counter))
+
+        # Display the resulting frame
+        if options.SHOW:
+          for s in streams:
+            cv2.imshow(s['ID'], s['lastframe'])
+
+        if cv2.waitKey(20) & 0xFF == ord('q'):
+            break
+  except KeyboardInterrupt:
+    print("KeyboardInterrupt, closing.")
+
 
   # When everything done, release the capture
   # cap.release()
