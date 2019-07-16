@@ -4,12 +4,16 @@
 import os
 import numpy as np
 import cv2
+from optparse import OptionParser
 
-# configurable defaults
-filename = 'video.avi' # .avi .mp4
-frames_per_seconds = 30.0
-my_res = '720p' # 480p | 720p | 1080p | 4k
-
+DEFAULTS = {
+  'filename': 'saved-media/video.avi', # .avi .mp4
+  'fps': 24.0,
+  'res': '720p', # 480p | 720p | 1080p | 4k
+  'res_choices': ('480p', '720p', '1080p', '4k'),
+  'camL': 0,
+  'camR': 1
+}
 
 # Set resolution for the video capture
 # Function adapted from https://kirr.co/0l6qmh
@@ -42,30 +46,95 @@ VIDEO_TYPE = {
 }
 
 def get_video_type(filename):
-    filename, ext = os.path.splitext(filename)
-    if ext in VIDEO_TYPE:
-      return  VIDEO_TYPE[ext]
-    return VIDEO_TYPE['avi']
+  filename, ext = os.path.splitext(filename)
+  if ext in VIDEO_TYPE:
+    return VIDEO_TYPE[ext]
+  return VIDEO_TYPE['avi']
+
+def get_LR_filenames(filename):
+  filename, ext = os.path.splitext(filename)
+  return (filename+'_L'+ext, filename+'_R'+ext)  
 
 if __name__ == '__main__':
-  cap = cv2.VideoCapture(0)
-  dims = get_dims(cap, res=my_res)
-  video_type_cv2 = get_video_type(filename)
-  save_path = os.path.join('saved-media', filename)
+  parser = OptionParser()
+  parser.add_option("-o", "--out-file", dest="FILENAME",
+                    help="Video file to write to", metavar="FILENAME",
+                    default=DEFAULTS['filename'])
 
-  out = cv2.VideoWriter(save_path, video_type_cv2, frames_per_seconds, dims)
+  parser.add_option("-s", "--size", dest="RES", type="choice",
+                    choices=DEFAULTS['res_choices'],
+                    default=DEFAULTS['res'],
+                    help="Method to use. Valid choices are {}. Default: %default".format(DEFAULTS['res_choices'])) #, metavar="RES",)
+
+  parser.add_option("-f", "--fps", dest="FPS", type="float",
+                    help="Frames Per Second", metavar="FPS",
+                    default=DEFAULTS['fps'])
+
+  parser.add_option("-l", "--left", dest="CAM_L", type="int",
+                    help="Camera ID for LEFT eye Camera", metavar="LEFT",
+                    default=DEFAULTS['camL'])
+
+  parser.add_option("-r", "--right", dest="CAM_R", type="int",
+                    help="Camera ID for RIGHT eye Camera", metavar="RIGHT",
+                    default=DEFAULTS['camR'])
+
+  (options, args) = parser.parse_args()
+
+  save_path_L, save_path_R = get_LR_filenames(options.FILENAME)
+
+  print("Config:")  
+  print("Cameras (left/right): {}/{}".format(options.CAM_L, options.CAM_R))
+  print("Out files: {} ({}, {})".format(options.FILENAME,save_path_L, save_path_R))
+  print("Resolution: {}".format(options.RES))
+  print("FPS: {}".format(options.FPS))
+
+  print("Starting recording, press 'Q' to stop...")
+
+  def get_stream(camId, res, fps, filepath):
+    cap = cv2.VideoCapture(camId)
+    dims = get_dims(cap, res=res)
+    video_type_cv2 = get_video_type(filepath)
+    writer = cv2.VideoWriter(filepath, video_type_cv2, fps, dims)
+    return {'cap': cap, 'dims': dims, 'vidtype': video_type_cv2, 'writer': writer, 'ID': filepath}
+
+  streams = []
+  if not options.CAM_L == -1:
+    streams.append(
+      get_stream(options.CAM_L,
+        options.RES,
+        options.FPS,
+        save_path_L))
+
+  if not options.CAM_R == -1:
+    streams.append(
+      get_stream(options.CAM_R,
+        options.RES,
+        options.FPS,
+        save_path_R))
 
   while(True):
       # Capture frame-by-frame
-      ret, frame = cap.read()
+      # ret, frame = capL.read()
+      for s in streams:
+        s['lastframe'] = s['cap'].read()[1]
+
       # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-      out.write(frame)
+      # outL.write(frame)
+      for s in streams:
+        s['writer'].write(s['lastframe'])
+
       # Display the resulting frame
-      cv2.imshow('frame',frame)
+      for s in streams:
+        cv2.imshow(s['ID'], s['lastframe'])
+
       if cv2.waitKey(20) & 0xFF == ord('q'):
           break
 
   # When everything done, release the capture
-  cap.release()
-  out.release()
+  # cap.release()
+  # out.release()
+  for s in streams:
+    s['cap'].release()
+    s['writer'].release()
+
   cv2.destroyAllWindows()
