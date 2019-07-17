@@ -1,12 +1,12 @@
-import os
+import os, time
 # import numpy as np
 import cv2
 from optparse import OptionParser
 
 DEFAULTS = {
-  'video': None
+  'video': None,
+  'delay': None
 }
-
 
 def parse_args():
   parser = OptionParser()
@@ -14,41 +14,20 @@ def parse_args():
                     help="Video file to read from, (default: %default)",
                     default=DEFAULTS['video'])
 
-  # parser.add_option("-o", "--out-file", dest="FILENAME",
-  #                   help="Video file to write to", metavar="FILENAME",
-  #                   default=DEFAULTS['filename'])
-
-  # parser.add_option("-d", "--dimensions", dest="RES", type="choice",
-  #                   choices=DEFAULTS['res_choices'],
-  #                   default=DEFAULTS['res'],
-  #                   help="Method to use. Valid choices are {}. Default: %default".format(DEFAULTS['res_choices'])) #, metavar="RES",)
-
-  # parser.add_option("-f", "--fps", dest="FPS", type="float",
-  #                   help="Frames Per Second", metavar="FPS",
-  #                   default=DEFAULTS['fps'])
-
-  # parser.add_option("-l", "--left", dest="CAM_L", type="int",
-  #                   help="Camera ID for LEFT eye Camera", metavar="LEFT",
-  #                   default=DEFAULTS['camL'])
-
-  # parser.add_option("-r", "--right", dest="CAM_R", type="int",
-  #                   help="Camera ID for RIGHT eye Camera", metavar="RIGHT",
-  #                   default=DEFAULTS['camR'])
-
-  # parser.add_option("-s", "--show",
-  #                   action="store_false", dest="SHOW", default=DEFAULTS['show'],
-  #                   help="Show recorded frames")
+  parser.add_option("-d", "--delay", dest="delay", type="float",
+                    help="Delay between each frame",
+                    default=DEFAULTS['delay'])
 
   (options, args) = parser.parse_args()
   return (options, args)
 
-def get_stream(vid_path):
-  cap = cv2.VideoCapture(vid_path)
-  return {'cap': cap, 'ID': vid_path}
-
 def get_LR_filenames(filename):
   filename, ext = os.path.splitext(filename)
   return (filename+'_L'+ext, filename+'_R'+ext)  
+
+def get_stream(vid_path):
+  cap = cv2.VideoCapture(vid_path)
+  return {'cap': cap, 'ID': vid_path}
 
 def update(streams):
   for s in streams:
@@ -70,8 +49,11 @@ if __name__ == '__main__':
 
   print("Starting calibration, press 'Q' or CTRL+C to stop...")
   try:
+    nextFrameTime = time.time()
     while(True):
-      update(streams)
+      if not options.delay or time.time() > nextFrameTime:
+        update(streams)
+        nextFrameTime = time.time() + options.delay
 
       if cv2.waitKey(20) & 0xFF == ord('q'):
             break
