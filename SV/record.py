@@ -2,7 +2,7 @@
 # https://github.com/codingforentrepreneurs/OpenCV-Python-Series/blob/master/src/lessons/record-video.py
 
 import os
-import numpy as np
+# import numpy as np
 import cv2
 from optparse import OptionParser
 
@@ -38,6 +38,7 @@ def get_dims(cap, res='1080p'):
     return width, height
 
 
+
 # Video Encoding, might require additional installs
 # Types of Codes: http://www.fourcc.org/codecs.php
 VIDEO_TYPE = {
@@ -51,6 +52,8 @@ def get_video_type(filename):
   if ext in VIDEO_TYPE:
     return VIDEO_TYPE[ext]
   return VIDEO_TYPE['avi']
+
+
 
 def get_LR_filenames(filename):
   filename, ext = os.path.splitext(filename)
@@ -80,7 +83,7 @@ if __name__ == '__main__':
                     default=DEFAULTS['camR'])
 
   parser.add_option("-s", "--show",
-                    action="store_false", dest="SHOW", default=True,
+                    action="store_false", dest="SHOW", default=DEFAULTS['show'],
                     help="Show recorded frames")
 
   (options, args) = parser.parse_args()
@@ -140,6 +143,7 @@ if __name__ == '__main__':
 
         if cv2.waitKey(20) & 0xFF == ord('q'):
             break
+
   except KeyboardInterrupt:
     print("KeyboardInterrupt, closing.")
 
