@@ -1,4 +1,5 @@
 config/config.yml
+saved-media
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -90,3 +91,7 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Editor(s)
+.vscode
+
