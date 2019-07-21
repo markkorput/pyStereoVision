@@ -1,3 +1,7 @@
+# Based on:
+# https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
+
+
 import os, time
 # import numpy as np
 import cv2
@@ -41,14 +45,16 @@ def get_stream(vid_path, pattern_dimm):
 def update(streams):
   for s in streams:
     (retval, frame) = s['cap'].read()
-    if retval:
+    if not retval:
+      continue
+
+    chess_ret, corners = get_corners(frame, s['pattern_dimm'])
+
+    if chess_ret:
+      overlay_img = cv2.drawChessboardCorners(frame, s['pattern_dimm'], corners, chess_ret)
+      cv2.imshow(s['ID'], overlay_img)
+    else:
       cv2.imshow(s['ID'], frame)
-
-      ret, corners = get_corners(frame, s['pattern_dimm'])
-
-      if ret:
-        overlay_img = cv2.drawChessboardCorners(frame, (7,6), corners, ret)
-        cv2.imshow(s['ID'], overlay_img)
 
 def get_corners(img, pattern_dimm):
   gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
@@ -78,15 +84,23 @@ if __name__ == '__main__':
     streams.append(get_stream(save_path_R, (options.x_amount, options.y_amount)))
 
   print("Starting calibration, press 'Q' or CTRL+C to stop...")
+  isPaused = False
+
   try:
     nextFrameTime = time.time()
     while(True):
-      if not options.delay or time.time() > nextFrameTime:
-        update(streams)
-        nextFrameTime = time.time() + options.delay
+      if not isPaused:
+        if not options.delay or time.time() > nextFrameTime:
+          update(streams)
+          nextFrameTime = time.time() + options.delay
 
-      if cv2.waitKey(20) & 0xFF == ord('q'):
-            break
+      key = cv2.waitKey(20) & 0xFF
+      if key == ord('q'):
+        break
+
+      if key == ord(' '):
+        isPaused = not isPaused
+
   except KeyboardInterrupt:
     print("KeyboardInterrupt, stopping")
     
