@@ -52,7 +52,7 @@ def get_LR_filenames(filename):
 def get_stream(vid_path, pattern_dimm, size):
   cap = cv2.VideoCapture(vid_path)
   return {'cap': cap, 'ID': vid_path, 'pattern_dimm': pattern_dimm,
-    'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [], 'square_size': size, 'calibrateResult': None}
+    'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [], 'square_size': size, 'calibrateResult': None, 'done': False}
 
 def get_calibration_data(image_points, pattern_dimm, image_dimms, pattern_square_size=1.0):
   # ## https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
@@ -73,10 +73,35 @@ def get_calibration_data(image_points, pattern_dimm, image_dimms, pattern_square
   result = (ret, mtx, dist, rvecs, tvecs)
   return result
 
+def get_undistort(img, calibdata, crop=True):
+  ret, mtx, dist, rvecs, tvecs = calibdata
+  h,  w = img.shape[:2]  
+  # img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+  
+  newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+
+  # undistort
+  dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+
+  # crop the image
+  if crop:
+    x,y,w,h = roi
+    dst = dst[y:y+h, x:x+w]
+  return dst
+
 def update(streams):
   for s in streams:
     if not s['calibrateResult'] == None:
-      continue
+      if len(s['calibrateResult']) == 0:
+        s['done'] = True
+      else:
+        (retval, frame) = s['cap'].read()
+        if retval:
+          undistorted_image = get_undistort(frame, s['calibrateResult'], crop=False)
+          #cv2.imwrite(id,dst)
+          cv2.imshow(s['ID'], undistorted_image)
+        else:
+          s['done'] = True
 
     if s['allFramesProcessed']:
       result = []
@@ -85,7 +110,7 @@ def update(streams):
         print("Didn't find any chessboards for: {}".format(s['ID']))
       else:
         imgdimms = s['last_found_frame'].shape[::-1]
-        print("Calibrating {} using checkerboard points from {} frames and image dimmensions: {}".format(s['ID'], len(s['frame_corners']), imgdimms))
+        print("Calibrating camera{} using checkerboard points from {} frames and image dimmensions: {}".format(s['ID'], len(s['frame_corners']), imgdimms))
         result = get_calibration_data(s['frame_corners'], s['pattern_dimm'], imgdimms, s['square_size'])
         print("calibrate result for {}:\n{}\n\n".format(s['ID'], result))
 
@@ -111,7 +136,7 @@ def update(streams):
 
     s['allFramesProcessed'] = True  
 
-  return len(list(filter(lambda s: s['calibrateResult'] == None, streams))) == 0
+  return len(list(filter(lambda s: s['done'] == False, streams))) == 0
 
 def get_corners(img, pattern_dimm):
   gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
