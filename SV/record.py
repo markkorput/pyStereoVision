@@ -145,7 +145,7 @@ if __name__ == '__main__':
             break
 
   except KeyboardInterrupt:
-    print("KeyboardInterrupt, closing.")
+    print("KeyboardInterrupt, stopping")
 
 
   # When everything done, release the capture

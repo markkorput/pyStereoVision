@@ -18,3 +18,8 @@ The following invocation records from cameras 5 (left) and 8 (right) and attempt
 ```
 python -m SV.record -l 5 -r 8 -d 480p -f 30 -o saved-media/test2.avi
 ```
+
+## Calibrate camera (2 videos -> preview)
+```
+python -m SV.calibrate -v saved-media/test2.avi -d 0.25 -x 9 -y 6
+```
