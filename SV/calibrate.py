@@ -14,6 +14,8 @@ DEFAULTS = {
   'square_size': 1.0
 }
 
+cropEnabled = False
+
 class Context:
   def __init__(self):
     pass
@@ -41,6 +43,11 @@ def parse_args():
   parser.add_option("-s", "--square-size", dest="square_size", type="float",
                     help="Size of each square",
                     default=DEFAULTS['square_size'])
+
+  parser.add_option("-c", "--crop",
+                    action="store_true", dest="crop", default=cropEnabled,
+                    help="Crop undistorted images when previewing calibration results")
+
 
   (options, args) = parser.parse_args()
   return (options, args)
@@ -97,7 +104,7 @@ def update(streams):
       else:
         (retval, frame) = s['cap'].read()
         if retval:
-          undistorted_image = get_undistort(frame, s['calibrateResult'], crop=False)
+          undistorted_image = get_undistort(frame, s['calibrateResult'], crop=cropEnabled)
           #cv2.imwrite(id,dst)
           cv2.imshow(s['ID'], undistorted_image)
         else:
@@ -157,6 +164,8 @@ def get_corners(img, pattern_dimm):
 if __name__ == '__main__':
   (options, args) = parse_args()
   print(options)
+
+  cropEnabled = options.crop
 
   streams = []
 
