@@ -1,0 +1,16 @@
+{
+  "App": {"stopped":"#stop_recording"},
+
+  "App/Event#record": {"on":"#record", "do":[]},
+  "App/Event#stop_recording": {"on":"#stop_recording", "do":["#stop_captures", "#stop_writers", "#destroy_all_cv_windows"]},
+
+  "App/Event#record/VideoCapture#L": {"id":0, "resolution":[640,480], "frame":"#frame_l", "stop":"#stop_captures"},
+  "App/Event#record/VideoWriter#L": {"to":"saved-media/video_L.avi", "fps":24.0, "resolution":[640,480], "codec":"XVID", "frame":"#frame_l", "frameWritten":"#frame_written_l", "stop":"#stop_writers"},
+  "App/Event#record/CvShow#L":{"id":"LEFT", "show":"#frame_written_l"},
+
+  "App/Event#record/VideoCapture#R": {"id":1, "resolution":[640,480], "frame":"#frame_r", "stop":"#stop_captures"},
+  "App/Event#record/VideoWriter#R": {"to":"saved-media/video_R.avi", "fps":24.0, "resolution":[640,480], "codec":"XVID", "frame":"#frame_r", "frameWritten":"#frame_written_r", "stop":"#stop_writers"},
+  "App/Event#record/CvShow#R":{"id":"RIGHT", "show":"#frame_written_r"},
+
+  "App/Event#record/Cv": {"destroyAllWindows":"#destroy_all_cv_windows"}
+}
