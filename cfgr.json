@@ -1,16 +1,10 @@
 {
-  "App": {"stopped":"#stop_recording"},
+  "App": {"started":"#start_recording", "stopped":["#stop_captures", "#stop_writers", "#destroy_all_cv_windows"], "update":["#read_frames", "#update_cv_windows"], "stop":"#stopApp", "sleep":0.01},
 
-  "App/Event#record": {"on":"#record", "do":[]},
-  "App/Event#stop_recording": {"on":"#stop_recording", "do":["#stop_captures", "#stop_writers", "#destroy_all_cv_windows"]},
+  "App/VideoCapture#L": {"verbose":true, "id":0, "resolution":[1280,720], "frame":["#write_frame_l", "#show_frame_l"], "start":"#start_recording", "read":"#read_frames", "stop":"#stop_captures"},
+  "App/VideoWriter#L": {"verbose":true, "to":"saved-media/pycfgr_video_L.avi", "fps":24.0, "resolution":[1280,720], "codec":"XVID", "frame":"#write_frame_l", "stop":"#stop_writers"},
+  "App/CvShow#L":{"verbose":true, "id":"LEFT", "show":"#show_frame_l", "destroyAllWindows":"#destroy_all_cv_windows", "update":"#update_cv_windows", "key-out":"#userKey"},
 
-  "App/Event#record/VideoCapture#L": {"id":0, "resolution":[640,480], "frame":"#frame_l", "stop":"#stop_captures"},
-  "App/Event#record/VideoWriter#L": {"to":"saved-media/video_L.avi", "fps":24.0, "resolution":[640,480], "codec":"XVID", "frame":"#frame_l", "frameWritten":"#frame_written_l", "stop":"#stop_writers"},
-  "App/Event#record/CvShow#L":{"id":"LEFT", "show":"#frame_written_l"},
-
-  "App/Event#record/VideoCapture#R": {"id":1, "resolution":[640,480], "frame":"#frame_r", "stop":"#stop_captures"},
-  "App/Event#record/VideoWriter#R": {"to":"saved-media/video_R.avi", "fps":24.0, "resolution":[640,480], "codec":"XVID", "frame":"#frame_r", "frameWritten":"#frame_written_r", "stop":"#stop_writers"},
-  "App/Event#record/CvShow#R":{"id":"RIGHT", "show":"#frame_written_r"},
-
-  "App/Event#record/Cv": {"destroyAllWindows":"#destroy_all_cv_windows"}
+  "App/int#keyEsc":{"value":27, "compareValue":"#userKey", "compareValueIsEqual":"#stopApp"},
+  "App/int#keyQ":{"value":113, "compareValue":"#userKey", "compareValueIsEqual":"#stopApp"}
 }

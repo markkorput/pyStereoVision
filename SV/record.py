@@ -132,6 +132,7 @@ if __name__ == '__main__':
         # outL.write(frame)
         for s in streams:
           s['writer'].write(s['lastframe'])
+          print("Wrote {} lines".format(len(s['lastframe'])))
 
         counter += 1
         print ("Recorded frame {}".format(counter))
