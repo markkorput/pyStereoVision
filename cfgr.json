@@ -6,5 +6,21 @@
   "App/CvShow#L":{"verbose":true, "id":"LEFT", "show":"#show_frame_l", "destroyAllWindows":"#destroy_all_cv_windows", "update":"#update_cv_windows", "key-out":"#userKey"},
 
   "App/int#keyEsc":{"value":27, "compareValue":"#userKey", "compareValueIsEqual":"#stopApp"},
-  "App/int#keyQ":{"value":113, "compareValue":"#userKey", "compareValueIsEqual":"#stopApp"}
+  "App/int#keyQ":{"value":113, "compareValue":"#userKey", "compareValueIsEqual":"#stopApp"},
+
+  
+  
+  "App#calibrate": {"started":"#start_calibrating", "stopped":["#stop_captures", "#destroy_all_cv_windows"], "update":["#read_frames", "#update_cv_windows"], "stop":"#stopApp", "sleep":0.01},
+
+  "App#calibrate/VideoCapture#L": {"verbose":true, "file":"saved-media/base75mm-pattern22mm_L.avi", "frame":"#new_frame", "start":"#start_calibrating", "read":"#read_frames", "stop":"#stop_captures"},
+  "App#calibrate/CvShow#L":{
+    "verbose":true, "id":"LEFT", "show":"#show_frame_l", "destroyAllWindows":"#destroy_all_cv_windows", "update":"#update_cv_windows", "key-out":"#userKey"},
+
+  "App#calibrate/cvtColor":{"frame-in":"#new_frame", "frame-out":"#new_frame_gray", "flag":"COLOR_BGR2GRAY"},
+
+  "App#calibrate/findChessboardCorners": {"frame-in":"#new_frame_gray", "corners":"#corners", "#cornersNotFound":"#corners_not_found"},
+
+  "App#calibrate/cornerSubPix": {"frame":"#new_frame_gray", "corners":"#corners"}
+
+
 }

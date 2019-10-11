@@ -12,6 +12,7 @@ class VideoCapture:
   def cfgr(builder):
     ## outputs
     builder.addInput('id').int_to_method(lambda obj: obj.setCaptureId)
+    builder.addInput('file').string_to_method(lambda obj: obj.setCaptureId)
     builder.addInput('resolution').list_to_method(lambda obj: obj.setResolutionFromList)
     builder.addInput('start').signal_to_method(lambda obj: obj.start)
     builder.addInput('stop').signal_to_method(lambda obj: obj.stop)

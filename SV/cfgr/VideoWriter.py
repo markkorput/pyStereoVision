@@ -55,7 +55,7 @@ class VideoWriter:
 
     frame_res = frame.shape[:2]
     if frame_res[0] != self.resolution[1] or frame_res[1] != self.resolution[0]:
-      self.verbose("[VideoWriter {}] got frame size ({}) that differs from write resolution ({})".format(self.target, frame_res, self.resolution))
+      print("[VideoWriter {}] got frame size ({}) that differs from write resolution ({})".format(self.target, frame_res, self.resolution))
     self.writer.write(frame)
     # self.verbose("[VideoWriter {}] frame written: {} lines".format(self.target, len(frame)))
     self.frameWrittenEvent(frame)
