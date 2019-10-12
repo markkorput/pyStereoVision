@@ -3,6 +3,7 @@
 import os, time, logging, cv2, json
 import numpy as np
 from optparse import OptionParser
+from datetime import datetime
 from .utils.CalibrationFile import CalibrationFile
 
 DEFAULTS = {
@@ -40,7 +41,7 @@ def get_undistort(img, calibdata, crop=True):
     dst = dst[y:y+h, x:x+w]
   return dst
 
-def update(streams, crop=False):
+def update(streams, crop, frameCallback):
   for s in streams:
     # already have calibration result? show undistorted image
     if not s.calibrationdata or len(s.calibrationdata) == 0:
@@ -51,6 +52,7 @@ def update(streams, crop=False):
         undistorted_image = get_undistort(frame, s.calibrationdata, crop=crop)
         #cv2.imwrite(id,dst)
         cv2.imshow("{} - UNDISTORTED".format(s.id), undistorted_image)
+        frameCallback(s.id, frame, undistorted_image)
       else:
         s.done = True
 
@@ -66,8 +68,22 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     calibdata = calibfile.getDataForVideoId(vid_path)
     streams.append(Stream(vid_path, calibdata))
 
-  logging.info("Starting undistort playback, press 'Q' or CTRL+C to stop...")
+  logging.info("Starting undistort playback, press <ESC> or 'Q' or CTRL+C to stop, <SPACE> to pause and 'S' to save a frame...")
   isPaused = False
+  saveframe = False
+
+  def frameCallback(videoId, frame,undistorted):
+    if not saveframe:
+      return
+    logging.info('saving frames...')
+    prefix = '{}-frame-{}'.format(videoId, datetime.now().strftime('%Y-%m-%d_%H.%M.%S'))
+    p1 = '{}-original.png'.format(prefix)
+    p2 = '{}-undistorted.png'.format(prefix)
+    cv2.imwrite(p1, frame)
+    logging.info('original saved to {}'.format(p1))
+    cv2.imwrite(p2, undistorted)
+    logging.info('undistorted saved to {}'.format(p2))
+
 
   try:
     # timing
@@ -76,17 +92,22 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     while(True):
       if not isPaused:
         if time.time() > nextFrameTime:
-          isDone = update(streams, crop=crop)
+          
+          isDone = update(streams, crop, frameCallback)
+          saveframe = False
           if delay:
             nextFrameTime = time.time() + delay
 
       # process user input
       key = cv2.waitKey(20) & 0xFF
-      if key == ord('q'):
+      if key == 27 or key == ord('q'): # escape or Q
         isDone = True
 
       if key == ord(' '):
         isPaused = not isPaused
+
+      if key == ord('s'):
+        saveframe = True
 
       if isDone:
         break
