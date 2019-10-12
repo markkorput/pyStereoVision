@@ -14,15 +14,26 @@ class Stream:
     self.loop = loop
 
     self.params = {
-      'blur-enabled': 0,
-      'blur-x': 0,
-      'blur-y': 0,
+      'invert-enabled': False,
+
+      'threshold-enabled': True,
+      'threshold-thresh': 80,
+      'threshold-maxval': 98,
+      'threshold-type': cv2.THRESH_BINARY, #cv2.THRESH_TRUNC,
+
+      'blur-enabled': 1,
+      'blur-x': 5,
+      'blur-y': 5,
       'blur-sigma-x': 0,
       'blur-sigma-y': 0,
 
-      'canny-enabled': 0,
-      'canny-threshold1': 100,
-      'canny-threshold2': 200
+      'canny-enabled': 1,
+      'canny-threshold1': 79,
+      'canny-threshold2': 143,
+
+      'blur2-enabled': 1,
+      'blur2-x': 5,
+      'blur2-y': 5
     }
 
     if output:
@@ -75,13 +86,31 @@ class Stream:
       # logging.info('Not ref frame for input: {}'.format(self.id))
       return self.lastCapturedFrame
 
+    # diff
     frame = cv2.absdiff(frame, self.refFrame)
+
+    # invert?
+    if self.params['invert-enabled']:
+      frame = (255-frame)
+
+    # threshold?
+    if self.params['threshold-enabled']:
+      ret,frame = cv2.threshold(frame, self.params['threshold-thresh'], self.params['threshold-maxval'],self.params['threshold-type'])
+
+    # blur?
     if self.params['blur-enabled'] and self.params['blur-x'] > 0 and self.params['blur-y'] > 0:
       frame = cv2.GaussianBlur(frame, (self.params['blur-x'],self.params['blur-y']), self.params['blur-sigma-x'], self.params['blur-sigma-y'])
 
+    # canny edge-detection?
     if self.params['canny-enabled']:
       frame = cv2.Canny(frame, self.params['canny-threshold1'], self.params['canny-threshold2'])
 
+     # blur2?
+    if self.params['blur2-enabled'] and self.params['blur2-x'] > 0 and self.params['blur2-y'] > 0:
+      frame = cv2.blur(frame, (self.params['blur2-x'],self.params['blur2-y']))
+
+    
+    # write frame to ouput?
     if self.writer:
       self.writer.write(self.lastProcessedFrame)
     
@@ -94,20 +123,32 @@ def createGui(streams):
     winid = 'GUI-{}'.format(s.id)
     cv2.namedWindow(winid, cv2.WINDOW_NORMAL)
 
-    def addStreamParam(param, max, valueProc=None):
+    def addStreamParam(param, max=None, initialValue=None, valueProc=None, values=None):
+      if values:
+        max = len(values)-1
+        valueProc = lambda v: values[v]
+        initialValue = values.index(s.params[param])
+
       def onValue(val):
         s.params[param] = valueProc(val) if valueProc else val
-      cv2.createTrackbar(param, winid, s.params[param], max, onValue)
+      cv2.createTrackbar(param, winid, initialValue if initialValue != None else s.params[param], max, onValue)
 
-    blurvalues = [0,1,3,5,7,9,11,13,15,17,19]
+    addStreamParam('invert-enabled', 1)
+    addStreamParam('threshold-enabled', 1)
+    addStreamParam('threshold-thresh', 255)
+    addStreamParam('threshold-maxval', 255)
+    addStreamParam('threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
     addStreamParam('blur-enabled', 1)
-    addStreamParam('blur-x', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
-    addStreamParam('blur-y', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
+    addStreamParam('blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
+    addStreamParam('blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
     addStreamParam('blur-sigma-x', 10)
     addStreamParam('blur-sigma-y', 10)
     addStreamParam('canny-enabled', 1)
     addStreamParam('canny-threshold1', 500)
     addStreamParam('canny-threshold2', 500)
+    addStreamParam('blur2-enabled', 0)
+    addStreamParam('blur2-x', 10)
+    addStreamParam('blur2-y', 10)
 
     cv2.moveWindow(winid, 5, 5 + 400*idx)
     cv2.resizeWindow(winid, 500,400)
