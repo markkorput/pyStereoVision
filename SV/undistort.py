@@ -14,16 +14,38 @@ DEFAULTS = {
 }
 
 class Stream:
-  def __init__(self, vid_path, calibdata=None):
+  def __init__(self, vid_path, calibdata, outvideo):
     self.id = vid_path
     self.cap = cv2.VideoCapture(vid_path)
     self.calibrationdata = calibdata
     self.done = False
+    self.writer = None
+
+    if outvideo:
+      if outvideo == 'auto':
+        filename, ext = os.path.splitext(vid_path)
+        outvideo = '{}-UNDISTORTED{}'.format(filename,ext)
+
+      VIDEO_TYPE = {
+        'avi': cv2.VideoWriter_fourcc(*'XVID'),
+        #'mp4': cv2.VideoWriter_fourcc(*'H264'),
+        'mp4': cv2.VideoWriter_fourcc(*'XVID'),
+      }
+
+      res = (640,360)
+      fps = 24
+
+      logging.info("Creating VideoWriter to: {}, {}fps, {}x{}px".format(outvideo, fps, res[0], res[1]))
+      self.writer = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, res)
 
   def __del__(self):
     if self.cap:
       self.cap.release()
       self.cap = None
+    if self.writer:
+      self.writer.release()
+      self.writer = None
+
 
 def get_undistort(img, calibdata, crop=True):
   ret, mtx, dist, rvecs, tvecs = calibdata
@@ -52,13 +74,15 @@ def update(streams, crop, frameCallback):
         undistorted_image = get_undistort(frame, s.calibrationdata, crop=crop)
         #cv2.imwrite(id,dst)
         cv2.imshow("{} - UNDISTORTED".format(s.id), undistorted_image)
+        if s.writer:
+          s.writer.write(undistorted_image)
         frameCallback(s.id, frame, undistorted_image)
       else:
         s.done = True
 
   return len(list(filter(lambda s: s.done == False, streams))) == 0
 
-def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False):
+def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
 
   streams = []
@@ -66,7 +90,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 
   for vid_path in video_paths:
     calibdata = calibfile.getDataForVideoId(vid_path)
-    streams.append(Stream(vid_path, calibdata))
+    streams.append(Stream(vid_path, calibdata, outvideo))
 
   logging.info("Starting undistort playback, press <ESC> or 'Q' or CTRL+C to stop, <SPACE> to pause and 'S' to save a frame...")
   isPaused = False
@@ -120,9 +144,13 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 if __name__ == '__main__':
   parser = OptionParser()
 
-  parser.add_option("-i", "--video", dest="video",
+  parser.add_option("-i", "--input-video", dest="video",
                     help="Video file to read from, (default: %default)",
                     default=DEFAULTS['video'])
+
+  parser.add_option("-o", "--output-video", dest="outvideo", type="string",
+                    help="Path to file where undistorted video should be saved",
+                    default=None)
 
   parser.add_option("-d", "--delay", dest="delay", type="float",
                     help="Delay between each frame",
@@ -139,10 +167,11 @@ if __name__ == '__main__':
   parser.add_option("-v", "--verbose",
                     action="store_true", dest="verbose", default=False,
                     help="Verbose logging to stdout")
+  
 
   (options, args) = parser.parse_args()
 
-  main(video_paths=[options.video], calibrationFilePath=options.calibfile, crop=options.crop, delay=options.delay, verbose=options.verbose)
+  main(video_paths=[options.video], calibrationFilePath=options.calibfile, crop=options.crop, delay=options.delay, verbose=options.verbose, outvideo=options.outvideo)
 
 
 
