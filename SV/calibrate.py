@@ -1,6 +1,6 @@
 # Based on:
 # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-import os, time, logging, cv2, json
+import os, time, logging, cv2, json, threading
 import numpy as np
 from optparse import OptionParser
 from .utils.CalibrationFile import CalibrationFile
@@ -24,7 +24,7 @@ def get_calibration_data(image_points, pattern_dimm, image_dimms, pattern_square
   objp[:, :2] = np.indices(pattern_dimm).T.reshape(-1, 2)
   objp *= pattern_square_size
 
-  logging.debug("Generated chessboard object points for calibrateCamera: {}".format(objp))
+  logging.debug("Generated chessboard object points for calibrateCamera:\n{}".format(objp))
   pattern_points = []
   for p in image_points:
     pattern_points.append(objp)
@@ -32,8 +32,8 @@ def get_calibration_data(image_points, pattern_dimm, image_dimms, pattern_square
   logging.info("Running cv2.calibrateCamera")
   ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(pattern_points,  image_points, image_dimms, None, None)
   logging.info("cv2.calibrateCamera finished, ret val: {}".format(ret))
-  result = (ret, mtx, dist, rvecs, tvecs)
-  return result
+  #result = (ret, mtx, dist, rvecs, tvecs)
+  return ret, mtx, dist, rvecs, tvecs #result
 
 def update(streams, crop=False, calibfile=None):
   for s in streams:
@@ -64,21 +64,37 @@ def update(streams, crop=False, calibfile=None):
 
     # do we have the chessboard data for all frames? then generate calibration data
     # from those frame chessboards
-    if s['calibrateResult'] == None:
+    if s['calibrateResult'] == None and not s['calibrationThread']:
       result = []
 
       if len(s['frame_corners']) == 0:
         logging.info("Didn't find any chessboards for: {}".format(s['ID']))
       else:
-        imgdimms = s['last_found_frame'].shape[::-1]
-        logging.info("Calibrating camera for {} using checkerboard points from {} frames and image resolution {}x{}".format(s['ID'], len(s['frame_corners']), imgdimms[0], imgdimms[1]))
-        result = get_calibration_data(s['frame_corners'], s['pattern_dimm'], imgdimms, s['square_size'])
-        logging.debug("calibrate result for {}:\n{}\n\n".format(s['ID'], result))
-        if calibfile:
-          calibfile.setDataForVideoId(s['ID'], result)
+        def threadFunc():
+          imgdimms = s['last_found_frame'].shape[::-1]
+          logging.info("Calibrating camera for {} using checkerboard points from {} frames and image resolution {}x{}".format(s['ID'], len(s['frame_corners']), imgdimms[0], imgdimms[1]))
+          ret, mtx, dist, rvecs, tvecs = get_calibration_data(s['frame_corners'], s['pattern_dimm'], imgdimms, s['square_size'])
+          s['calibrateResult'] = (ret, mtx, dist, rvecs, tvecs)
+          logging.debug("calibrate result for {}:\n{}\n\n".format(s['ID'], s['calibrateResult']))
+          if calibfile:
+            calibfile.setDataForVideoId(s['ID'], s['calibrateResult'])
+            logging.info("calibration data for {} saved to {}".format(s['ID'], calibfile.filepath))
 
-      s['calibrateResult'] = result
+      thread = threading.Thread(target=threadFunc)
+      thread.start()
+      s['calibrationThread'] = thread
+      s['starttime'] = time.time()
       continue
+
+    if s['calibrationThread']:
+      if s['calibrationThread'].isAlive():
+        print("Calibrating... ({0:.2f}s)\r".format(time.time() - s['starttime']), end='')
+      else:
+        s['calibrationThread'] = None
+        print('Calibration done.')
+        
+    if s['calibrateResult'] and not s['calibrationThread']:
+      s['done'] = True
 
   return len(list(filter(lambda s: s['done'] == False, streams))) == 0
 
@@ -109,7 +125,9 @@ def main(video_paths, grid_size, square_size, calibrationFilePath=None, crop=Tru
     if calibres:
       logging.info("Found calibration results for {} in {}".format(vid_path, calibrationFilePath))
     stream = {'cap': cap, 'ID': vid_path, 'pattern_dimm': (grid_size[0], grid_size[1]),
-      'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [], 'square_size': square_size, 'calibrateResult': calibres, 'done': False}
+      'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [],
+      'square_size': square_size, 'calibrateResult': calibres,
+      'calibrationThread': None, 'done': False, 'starttime': None}
     streams.append(stream)
 
   logging.info("Starting calibration, press 'Q' or CTRL+C to stop...")
@@ -123,6 +141,8 @@ def main(video_paths, grid_size, square_size, calibrationFilePath=None, crop=Tru
       if not isPaused:
         if time.time() > nextFrameTime:
           isDone = update(streams, crop=crop, calibfile=calibfile)
+          if isDone:
+            logging.info("Finished")
           if delay:
             nextFrameTime = time.time() + delay
 

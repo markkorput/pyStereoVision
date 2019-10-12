@@ -40,12 +40,10 @@ def setData(data, pathlist, itemdata):
   cursor = data
 
   for cur in pathlist[:-1]:
-    if not cursor or not cur in cursor:
-      return data
+    if not cur in cursor:
+      cursor[cur] = {}
+    cursor= cursor[cur]
  
-  if not cursor:
-    return data
-  
   cursor[pathlist[-1]] = itemdata
   return data
 
@@ -86,6 +84,6 @@ class CalibrationFile:
   def setDataForVideoId(self, videoId, data, save=True):
     if not self.data:
       self.data = loadData(self.filepath, fallback={})
-    self.data = setData(self.data, ['sv', 'calibration_data', videoId], data)
+    self.data = setData(self.data, ['sv', 'calibration_data', videoId], videoDataToSerializable(data))
     if save:
       saveData(self.filepath, self.data)
