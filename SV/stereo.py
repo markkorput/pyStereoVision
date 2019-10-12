@@ -22,7 +22,7 @@ class Stream:
     self.init()
 
   def init(self):
-    self.cap = cv2.VideoCapture(self.id)
+    self.cap = cv2.VideoCapture(int(self.id) if self.id.isdigit() else self.id)
     self.done = False
 
   def __del__(self):
@@ -38,9 +38,10 @@ class Computer:
 
   def set(self, minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange):
     if self.timotheus:
-      self.timotheusInit()
+      self.timotheusInit(minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange)
       return
 
+    
     logging.info('Initializing stereo computer with values: {}'.format(
       (numDisparities, blockSize, minDisp,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange)))
 
@@ -54,6 +55,7 @@ class Computer:
       uniquenessRatio = uniquenessRatio,
       speckleWindowSize = speckleWindowSize,
       speckleRange = speckleRange,
+      preFilterCap=63,
       mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
 
     # self.stereo = cv2.StereoSGBM_create(minDisparity=minDisp, blockSize=blockSize)
@@ -65,9 +67,22 @@ class Computer:
     return self.stereo.compute(*args)
 
   # http://timosam.com/python_opencv_depthimage
-  def timotheusInit(self):
+  def timotheusInit(self, minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange):
     # SGBM Parameters -----------------
     window_size = 3                     # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
+
+    # self.left_matcher = cv2.StereoSGBM_create(
+    #   minDisparity=minDisp,
+    #   numDisparities=numDisparities,
+    #   blockSize=blockSize,
+    #   P1=p1,
+    #   P2=p2,
+    #   disp12MaxDiff=disp12MaxDiff,
+    #   uniquenessRatio = uniquenessRatio,
+    #   speckleWindowSize = speckleWindowSize,
+    #   speckleRange = speckleRange,
+    #   preFilterCap=63,
+    #   mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
 
     self.left_matcher = cv2.StereoSGBM_create(
         minDisparity=0,
@@ -140,7 +155,13 @@ def update(streams, computer, crop, showinput, gray, disparityFrameCallback):
   for s in streams:
     (retval, frame) = s.cap.read()
     if retval:
-      undistorted_image = get_undistort(frame, s.calibrationdata, crop=crop) if s.calibrationdata else frame
+      
+      undistorted_image = frame
+
+      if s.calibrationdata:
+        logging.info("Applying calbiration...")
+        undistorted_image = get_undistort(frame, s.calibrationdata, crop=crop)
+
       if showinput:
         cv2.imshow("{} - UNDISTORTED".format(s.id), undistorted_image)
       #if s.writer:
@@ -150,11 +171,21 @@ def update(streams, computer, crop, showinput, gray, disparityFrameCallback):
       s.done = True
 
   if len(frames) == 2:
-    logging.debug('Computing disparity...')
+
     if gray:
+      logging.info("Converting to grayscale...")
       frames[0] = cv2.cvtColor(frames[0], cv2.COLOR_BGR2GRAY)
       frames[1] = cv2.cvtColor(frames[1], cv2.COLOR_BGR2GRAY)
 
+
+    h1,w1 = frames[0].shape[:2]  
+    h2,w2 = frames[1].shape[:2]
+
+    if h1 != h2 or w1 != w2:
+      logging.info('Resizing left frame...') 
+      frames[0] = cv2.resize(frames[0], (w2,h2))
+
+    logging.debug('Computing disparity...')
     disp = computer.compute(frames[0], frames[1]) #.astype(np.float32) / 16.0
 
     # disp = getDisparity(pair[0], pair[1])
@@ -362,7 +393,7 @@ if __name__ == '__main__':
                     action="store_true", dest="verbose", default=False,
                     help="Verbose logging to stdout")
 
-  parser.add_option("-g", "--gray",
+  parser.add_option("-G", "--no-gray",
                     action="store_false" if DEFAULTS['gray'] else "store_true", dest="gray", default=DEFAULTS['gray'],
                     help="Convert to grayscale before calculating disparity")
   
