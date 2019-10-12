@@ -9,7 +9,7 @@ from optparse import OptionParser
 import json
 
 DEFAULTS = {
-  'video': 'saved-media/base75mm-pattern22mm.avi',
+  'video': 'saved-media/base75mm-pattern22mm-short.avi',
   'delay': None,
   'x_amount': 9, 'y_amount': 6,
   'square_size': 1.0,
@@ -152,6 +152,7 @@ def update(streams, crop=False, calibFile=None):
       else:
         s['allFramesProcessed'] = True  
         print("All frames processed for {}".format(s['ID']))
+        cv2.destroyAllWindows()
 
       continue
 
@@ -206,6 +207,8 @@ def get_corners(img, pattern_dimm):
 def get_stream(vid_path, pattern_dimm, size, calibrationFilePath=None):
   cap = cv2.VideoCapture(vid_path)
   calibres = getCalibData(calibrationFilePath, vid_path) if calibrationFilePath else None
+  if calibres:
+    print("Found calibration results for {} in {}".format(vid_path, calibrationFilePath))
   return {'cap': cap, 'ID': vid_path, 'pattern_dimm': pattern_dimm,
     'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [], 'square_size': size, 'calibrateResult': calibres, 'done': False}
 
