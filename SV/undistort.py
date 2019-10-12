@@ -12,6 +12,18 @@ DEFAULTS = {
   'crop': False
 }
 
+class Stream:
+  def __init__(self, vid_path, calibdata=None):
+    self.id = vid_path
+    self.cap = cv2.VideoCapture(vid_path)
+    self.calibrationdata = calibdata
+    self.done = False
+
+  def __del__(self):
+    if self.cap:
+      self.cap.release()
+      self.cap = None
+
 def get_undistort(img, calibdata, crop=True):
   ret, mtx, dist, rvecs, tvecs = calibdata
   h,  w = img.shape[:2]  
@@ -31,18 +43,18 @@ def get_undistort(img, calibdata, crop=True):
 def update(streams, crop=False):
   for s in streams:
     # already have calibration result? show undistorted image
-    if len(s['calibrationData']) == 0:
-      s['done'] = True
+    if not s.calibrationdata or len(s.calibrationdata) == 0:
+      s.done = True
     else:
-      (retval, frame) = s['cap'].read()
+      (retval, frame) = s.cap.read()
       if retval:
-        undistorted_image = get_undistort(frame, s['calibrationData'], crop=crop)
+        undistorted_image = get_undistort(frame, s.calibrationdata, crop=crop)
         #cv2.imwrite(id,dst)
-        cv2.imshow("{} - UNDISTORTED".format(s['ID']), undistorted_image)
+        cv2.imshow("{} - UNDISTORTED".format(s.id), undistorted_image)
       else:
-        s['done'] = True
+        s.done = True
 
-  return len(list(filter(lambda s: s['done'] == False, streams))) == 0
+  return len(list(filter(lambda s: s.done == False, streams))) == 0
 
 def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
@@ -51,10 +63,8 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   calibfile = CalibrationFile(calibrationFilePath)
 
   for vid_path in video_paths:
-    cap = cv2.VideoCapture(vid_path)
     calibdata = calibfile.getDataForVideoId(vid_path)
-    stream = {'cap': cap, 'ID': vid_path, 'calibrationData': calibdata, 'done': False}
-    streams.append(stream)
+    streams.append(Stream(vid_path, calibdata))
 
   logging.info("Starting undistort playback, press 'Q' or CTRL+C to stop...")
   isPaused = False
@@ -78,18 +88,11 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
       if key == ord(' '):
         isPaused = not isPaused
 
-      if key == ord('c'): # continue
-        for s in streams:
-          s['allFramesProcessed'] = True
-
       if isDone:
         break
 
   except KeyboardInterrupt:
     logging.info("KeyboardInterrupt, stopping")
-    
-  for s in streams:
-    s['cap'].release()
 
   cv2.destroyAllWindows()
 
