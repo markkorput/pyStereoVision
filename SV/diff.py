@@ -14,11 +14,15 @@ class Stream:
     self.loop = loop
 
     self.params = {
-      'blur-toggle': 0,
+      'blur-enabled': 0,
       'blur-x': 0,
       'blur-y': 0,
       'blur-sigma-x': 0,
-      'blur-sigma-y': 0
+      'blur-sigma-y': 0,
+
+      'canny-enabled': 0,
+      'canny-threshold1': 100,
+      'canny-threshold2': 200
     }
 
     if output:
@@ -72,9 +76,11 @@ class Stream:
       return self.lastCapturedFrame
 
     frame = cv2.absdiff(frame, self.refFrame)
-    if self.params['blur-toggle'] and self.params['blur-x'] > 0 and self.params['blur-y'] > 0:
+    if self.params['blur-enabled'] and self.params['blur-x'] > 0 and self.params['blur-y'] > 0:
       frame = cv2.GaussianBlur(frame, (self.params['blur-x'],self.params['blur-y']), self.params['blur-sigma-x'], self.params['blur-sigma-y'])
-    # edges = cv2.Canny(diff, 100, 200)
+
+    if self.params['canny-enabled']:
+      frame = cv2.Canny(frame, self.params['canny-threshold1'], self.params['canny-threshold2'])
 
     if self.writer:
       self.writer.write(self.lastProcessedFrame)
@@ -84,21 +90,29 @@ class Stream:
 
 def createGui(streams):
 
-  for s in streams:
+  for idx, s in enumerate(streams):
     winid = 'GUI-{}'.format(s.id)
-    cv2.namedWindow(winid)
+    cv2.namedWindow(winid, cv2.WINDOW_NORMAL)
 
-    def addTrackbar(param, max, valueProc=None):
+    def addStreamParam(param, max, valueProc=None):
       def onValue(val):
         s.params[param] = valueProc(val) if valueProc else val
       cv2.createTrackbar(param, winid, s.params[param], max, onValue)
 
     blurvalues = [0,1,3,5,7,9,11,13,15,17,19]
-    addTrackbar('blur-toggle', 1)
-    addTrackbar('blur-x', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
-    addTrackbar('blur-y', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
-    addTrackbar('blur-sigma-x', 10)
-    addTrackbar('blur-sigma-y', 10)
+    addStreamParam('blur-enabled', 1)
+    addStreamParam('blur-x', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
+    addStreamParam('blur-y', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
+    addStreamParam('blur-sigma-x', 10)
+    addStreamParam('blur-sigma-y', 10)
+    addStreamParam('canny-enabled', 1)
+    addStreamParam('canny-threshold1', 500)
+    addStreamParam('canny-threshold2', 500)
+
+    cv2.moveWindow(winid, 5, 5 + 400*idx)
+    cv2.resizeWindow(winid, 500,400)
+    # cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+    cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_NORMAL)
 
 def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
