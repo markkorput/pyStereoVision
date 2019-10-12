@@ -1,2 +1,4 @@
-opencv-python==4.0.0.21
+#opencv-python==4.0.0.21
+opencv-contrib-python==4.1.1.26 # http://timosam.com/python_opencv_depthimage
 cfgr>=0.0.2.7
+# scikit-learn==0.21.3 # http://timosam.com/python_opencv_depthimage

@@ -11,7 +11,8 @@ DEFAULTS = {
   'delay': None,
   'calibfile': None, #'saved-media/calibration.json',
   'crop': False,
-  'loop': True
+  'loop': True,
+  'gray': True
 }
 
 class Stream:
@@ -31,9 +32,15 @@ class Stream:
 
 class Computer:
   def __init__(self, *args):
+    self.timotheus = True
     self.set(*args)
 
+
   def set(self, minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange):
+    if self.timotheus:
+      self.timotheusInit()
+      return
+
     logging.info('Initializing stereo computer with values: {}'.format(
       (numDisparities, blockSize, minDisp,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange)))
 
@@ -46,13 +53,68 @@ class Computer:
       disp12MaxDiff=disp12MaxDiff,
       uniquenessRatio = uniquenessRatio,
       speckleWindowSize = speckleWindowSize,
-      speckleRange = speckleRange)
+      speckleRange = speckleRange,
+      mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
 
     # self.stereo = cv2.StereoSGBM_create(minDisparity=minDisp, blockSize=blockSize)
 
-
   def compute(self, *args):
+    if self.timotheus:
+      return self.timotheusCompute(*args)
+
     return self.stereo.compute(*args)
+
+  # http://timosam.com/python_opencv_depthimage
+  def timotheusInit(self):
+    # SGBM Parameters -----------------
+    window_size = 3                     # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
+
+    self.left_matcher = cv2.StereoSGBM_create(
+        minDisparity=0,
+        numDisparities=160,             # max_disp has to be dividable by 16 f. E. HH 192, 256
+        blockSize=5,
+        P1=8 * 3 * window_size ** 2,    # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
+        P2=32 * 3 * window_size ** 2,
+        disp12MaxDiff=1,
+        uniquenessRatio=15,
+        speckleWindowSize=0,
+        speckleRange=2,
+        preFilterCap=63,
+        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
+    )
+
+    # This leads us to define the right_matcher so we can use it for our filtering later. This is a simple one-liner:
+    self.right_matcher = cv2.ximgproc.createRightMatcher(self.left_matcher)
+
+    # To obtain hole free depth-images we can use the WLS-Filter. This filter also requires some parameters which are shown below:
+
+    # FILTER Parameters
+    lmbda = 80000
+    sigma = 1.2
+    visual_multiplier = 1.0
+    
+    self.wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=self.left_matcher)
+    self.wls_filter.setLambda(lmbda)
+    self.wls_filter.setSigmaColor(sigma)
+    # Now we can compute the disparities and convert the resulting images to the desired int16 format or how OpenCV names it: CV_16S for our filter:
+
+  def timotheusCompute(self, imgL, imgR, normalize=True):
+    print('computing disparity...')
+    displ = self.left_matcher.compute(imgL, imgR)  # .astype(np.float32)/16
+    dispr = self.right_matcher.compute(imgR, imgL)  # .astype(np.float32)/16
+    displ = np.int16(displ)
+    dispr = np.int16(dispr)
+    filteredImg = self.wls_filter.filter(displ, imgL, None, dispr)  # important to put "imgL" here!!!
+    # Finally if you show this image with imshow() you may not see anything. This is due to values being not normalized to a 8-bit format. So lets fix this by normalizing our depth map:
+
+    if normalize:
+      filteredImg = cv2.normalize(src=filteredImg, dst=filteredImg, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX);
+
+    filteredImg = np.uint8(filteredImg)
+    # cv2.imshow('Disparity Map', filteredImg)
+    # cv2.waitKey()
+    # cv2.destroyAllWindows()
+    return filteredImg
 
 
 def get_undistort(img, calibdata, crop=True):
@@ -71,7 +133,7 @@ def get_undistort(img, calibdata, crop=True):
     dst = dst[y:y+h, x:x+w]
   return dst
 
-def update(streams, computer, crop, showinput, disparityFrameCallback):
+def update(streams, computer, crop, showinput, gray, disparityFrameCallback):
   frames = []
 
   # for s in streams:
@@ -89,7 +151,11 @@ def update(streams, computer, crop, showinput, disparityFrameCallback):
 
   if len(frames) == 2:
     logging.debug('Computing disparity...')
-    disp = computer.compute(frames[0], frames[1]).astype(np.float32) / 16.0
+    if gray:
+      frames[0] = cv2.cvtColor(frames[0], cv2.COLOR_BGR2GRAY)
+      frames[1] = cv2.cvtColor(frames[1], cv2.COLOR_BGR2GRAY)
+
+    disp = computer.compute(frames[0], frames[1]) #.astype(np.float32) / 16.0
 
     # disp = getDisparity(pair[0], pair[1])
     # cv2.imshow("DISPARITY", disp)
@@ -99,7 +165,7 @@ def update(streams, computer, crop, showinput, disparityFrameCallback):
 
   return len(list(filter(lambda s: s.done == True, streams))) > 0
 
-def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None, loop=False, showinput=False):
+def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None, loop=False, showinput=False, gray=True):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
 
   # input streams
@@ -167,6 +233,18 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 
   cv2.createTrackbar("blockSize", "GUI", 1, len(blockSizeVals)-1, onBlockSize)
 
+  def onP1(val):    
+    computerValues[3] = val
+    computer.set(*computerValues)
+
+  cv2.createTrackbar("P1", "GUI", computerValues[3], 1000, onP1)
+
+  def onP2(val):    
+    computerValues[4] = val
+    computer.set(*computerValues)
+
+  cv2.createTrackbar("P2", "GUI", computerValues[4], 1000, onP2)
+
 
   def onDiff(val):    
     computerValues[2] = val-1
@@ -214,7 +292,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
       if not isPaused:
         if time.time() > nextFrameTime:
           
-          isDone = update(streams, computer, crop, showinput, disparityFrameCallback)
+          isDone = update(streams, computer, crop, showinput, gray, disparityFrameCallback)
 
           if isDone and loop:
             isDone = False
@@ -283,11 +361,16 @@ if __name__ == '__main__':
   parser.add_option("-v", "--verbose",
                     action="store_true", dest="verbose", default=False,
                     help="Verbose logging to stdout")
+
+  parser.add_option("-g", "--gray",
+                    action="store_false" if DEFAULTS['gray'] else "store_true", dest="gray", default=DEFAULTS['gray'],
+                    help="Convert to grayscale before calculating disparity")
   
+
 
   (options, args) = parser.parse_args()
 
-  main(video_paths=(options.leftvideo, options.rightvideo), calibrationFilePath=options.calibfile, crop=options.crop, delay=options.delay, verbose=options.verbose, outvideo=options.outvideo, loop=options.loop, showinput=options.showinput)
+  main(video_paths=(options.leftvideo, options.rightvideo), calibrationFilePath=options.calibfile, crop=options.crop, delay=options.delay, verbose=options.verbose, outvideo=options.outvideo, loop=options.loop, showinput=options.showinput, gray=options.gray)
 
 
 
