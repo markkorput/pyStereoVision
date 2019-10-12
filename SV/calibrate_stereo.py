@@ -3,15 +3,18 @@
 import os, time, logging, cv2, json
 import numpy as np
 from optparse import OptionParser
-from .utils.CalibrationFile import CalibrationFile
 
 DEFAULTS = {
-  'video': 'saved-media/base75mm-pattern22mm-short_L.avi',
+  'video': 'saved-media/base75mm-pattern22mm-short.avi',
   'delay': None,
   'x_amount': 9, 'y_amount': 6,
-  'square_size': 0.022,
+  'square_size': 1.0,
   'calibfile': 'saved-media/calibration.json'
 }
+
+def get_LR_filenames(filename):
+  filename, ext = os.path.splitext(filename)
+  return (filename+'_L'+ext, filename+'_R'+ext)  
 
 def get_calibration_data(image_points, pattern_dimm, image_dimms, pattern_square_size=1.0):
   # ## https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
@@ -24,18 +27,101 @@ def get_calibration_data(image_points, pattern_dimm, image_dimms, pattern_square
   objp[:, :2] = np.indices(pattern_dimm).T.reshape(-1, 2)
   objp *= pattern_square_size
 
-  logging.debug("Generated chessboard object points for calibrateCamera: {}".format(objp))
   pattern_points = []
   for p in image_points:
     pattern_points.append(objp)
 
-  logging.info("Running cv2.calibrateCamera")
   ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(pattern_points,  image_points, image_dimms, None, None)
-  logging.info("cv2.calibrateCamera finished, ret val: {}".format(ret))
   result = (ret, mtx, dist, rvecs, tvecs)
   return result
 
-def update(streams, crop=False, calibfile=None):
+def get_undistort(img, calibdata, crop=True):
+  ret, mtx, dist, rvecs, tvecs = calibdata
+  h,  w = img.shape[:2]  
+  # img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+  
+  newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+
+  # undistort
+  dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+
+  # crop the image
+  if crop:
+    x,y,w,h = roi
+    dst = dst[y:y+h, x:x+w]
+  return dst
+
+def getCalibData(filepath, videoId):
+  if not os.path.isfile(filepath):
+    return None
+
+  text = None
+  with open(filepath, "r") as f:
+      text = f.read()
+
+  data = None
+  try:
+    data = json.loads(text)
+  except json.decoder.JSONDecodeError as err:
+    logging.warning('Could not load calibration json: \n{}'.format(err))
+    return None
+
+  if not 'sv' in data:
+    return None
+  if not 'calibration_data' in data['sv']:
+    return None
+  if not videoId in data['sv']['calibration_data']:
+    return None
+  serialized = data['sv']['calibration_data'][videoId]
+  return fromSerializable(serialized)
+
+
+def fromSerializable(data):
+  return [
+    data[0],
+    np.array(data[1]),
+    np.array(data[2]),
+    list(map(lambda i: np.array(i), data[3])),
+    list(map(lambda i: np.array(i), data[4]))
+  ]
+
+def toSerializable(data):
+  return [
+    data[0],
+    data[1].tolist(),
+    data[2].tolist(),
+    list(map(lambda i: i.tolist(), data[3])),
+    list(map(lambda i: i.tolist(), data[4]))
+  ]
+
+def saveCalibData(filepath, data, videoId):
+  text = '{}'
+  if os.path.isfile(filepath):
+    with open(filepath, "r") as f:
+      text = f.read()
+  
+  json_data = {}
+  try:
+    json_data = json.loads(text)
+  except json.decoder.JSONDecodeError as err:
+    logging.debug('Could not load calibration json from: {} (file missing or corrupt json content). Continueing without calibration data'.format(filepath))
+    json_data = {}
+
+  # json.set(['sv','calibration_data',videoId], json_data)
+  if not 'sv' in json_data:
+    json_data['sv'] = {}
+  if not 'calibration_data' in json_data['sv']:
+    json_data['sv']['calibration_data'] = {}
+
+  json_data['sv']['calibration_data'][videoId] = toSerializable(data)
+
+  with open(filepath, "w") as f:
+    # f.write(json.dumps(json_data))
+    json.dump(json_data, f)
+
+  logging.info('Wrote calibration data for {} to: {}'.format(videoId, filepath))
+
+def update(streams, crop=False, calibFile=None):
   for s in streams:
     # process each frame; try to find a chessboard pattern and save the data if found
     if s['calibrateResult'] == None and not s['allFramesProcessed']:
@@ -50,7 +136,6 @@ def update(streams, crop=False, calibfile=None):
           # save found corners
           ## see: https://github.com/opencv/opencv/blob/master/samples/python/calibrate.py#L83
           s['frame_corners'].append(corners.reshape(-1,2))
-          print("Found {} of frames with chessboard patterns for {}\r".format(len(s['frame_corners']), s['ID']), end="")
           s['last_found_frame'] = gray
         else:
           cv2.imshow(s['ID'], frame)
@@ -71,14 +156,26 @@ def update(streams, crop=False, calibfile=None):
         logging.info("Didn't find any chessboards for: {}".format(s['ID']))
       else:
         imgdimms = s['last_found_frame'].shape[::-1]
-        logging.info("Calibrating camera for {} using checkerboard points from {} frames and image resolution {}x{}".format(s['ID'], len(s['frame_corners']), imgdimms[0], imgdimms[1]))
+        logging.info("Calibrating camera for {} using checkerboard points from {} frames and image dimmensions: {}".format(s['ID'], len(s['frame_corners']), imgdimms))
         result = get_calibration_data(s['frame_corners'], s['pattern_dimm'], imgdimms, s['square_size'])
         logging.debug("calibrate result for {}:\n{}\n\n".format(s['ID'], result))
-        if calibfile:
-          calibfile.setDataForVideoId(s['ID'], result)
+        if calibFile:
+          saveCalibData(calibFile, result, s['ID'])
 
       s['calibrateResult'] = result
       continue
+
+    # already have calibration result? show undistorted image
+    if len(s['calibrateResult']) == 0:
+      s['done'] = True
+    else:
+      (retval, frame) = s['cap'].read()
+      if retval:
+        undistorted_image = get_undistort(frame, s['calibrateResult'], crop=crop)
+        #cv2.imwrite(id,dst)
+        cv2.imshow("{} - UNDISTORTED".format(s['ID']), undistorted_image)
+      else:
+        s['done'] = True
 
   return len(list(filter(lambda s: s['done'] == False, streams))) == 0
 
@@ -97,20 +194,22 @@ def get_corners(img, pattern_dimm):
   subcorners = cv2.cornerSubPix(gray,corners,pattern_dimm,(-1,-1),criteria)
   return found, corners, subcorners, gray
 
+
+def get_stream(vid_path, pattern_dimm, size, calibrationFilePath=None):
+  cap = cv2.VideoCapture(vid_path)
+  calibres = getCalibData(calibrationFilePath, vid_path) if calibrationFilePath else None
+  if calibres:
+    logging.info("Found calibration results for {} in {}".format(vid_path, calibrationFilePath))
+  return {'cap': cap, 'ID': vid_path, 'pattern_dimm': pattern_dimm,
+    'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [], 'square_size': size, 'calibrateResult': calibres, 'done': False}
+
 def main(video_paths, grid_size, square_size, calibrationFilePath=None, crop=True, delay=0, verbose=False):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
 
-  calibfile = CalibrationFile(calibrationFilePath)
   streams = []
 
-  for vid_path in video_paths:
-    cap = cv2.VideoCapture(vid_path)
-    calibres = calibfile.getDataForVideoId(vid_path)
-    if calibres:
-      logging.info("Found calibration results for {} in {}".format(vid_path, calibrationFilePath))
-    stream = {'cap': cap, 'ID': vid_path, 'pattern_dimm': (grid_size[0], grid_size[1]),
-      'allFramesProcessed': False, 'last_found_frame': None, 'frame_corners': [], 'square_size': square_size, 'calibrateResult': calibres, 'done': False}
-    streams.append(stream)
+  for p in video_paths:
+    streams.append(get_stream(p, (grid_size[0], grid_size[1]), square_size, calibrationFilePath))
 
   logging.info("Starting calibration, press 'Q' or CTRL+C to stop...")
   isPaused = False
@@ -122,7 +221,7 @@ def main(video_paths, grid_size, square_size, calibrationFilePath=None, crop=Tru
     while(True):
       if not isPaused:
         if time.time() > nextFrameTime:
-          isDone = update(streams, crop=crop, calibfile=calibfile)
+          isDone = update(streams, crop=crop, calibFile=calibrationFilePath)
           if delay:
             nextFrameTime = time.time() + delay
 
@@ -187,7 +286,7 @@ if __name__ == '__main__':
 
   (options, args) = parser.parse_args()
 
-  main(video_paths=[options.video], calibrationFilePath=options.calibfile, grid_size=(options.x_amount, options.y_amount), square_size=options.square_size, crop=options.crop, delay=options.delay, verbose=options.verbose)
+  main(video_paths=get_LR_filenames(options.video), calibrationFilePath=options.calibfile, grid_size=(options.x_amount, options.y_amount), square_size=options.square_size, crop=options.crop, delay=options.delay, verbose=options.verbose)
 
 
 
