@@ -196,53 +196,10 @@ def update(streams, computer, crop, showinput, gray, disparityFrameCallback):
 
   return len(list(filter(lambda s: s.done == True, streams))) > 0
 
-def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None, loop=False, showinput=False, gray=True):
-  logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
 
-  # input streams
-  streams = []
-  calibfile = CalibrationFile(calibrationFilePath) if calibrationFilePath else None
-
-  for vid_path in video_paths:
-    calibdata = calibfile.getDataForVideoId(vid_path) if calibfile else None
-    streams.append(Stream(vid_path, calibdata))
-
-  # disparity output writer
-  disparityWriter = None
-  if outvideo:
-    VIDEO_TYPE = {
-      'avi': cv2.VideoWriter_fourcc(*'XVID'),
-      #'mp4': cv2.VideoWriter_fourcc(*'H264'),
-      'mp4': cv2.VideoWriter_fourcc(*'XVID'),
-    }
-
-    res = (640,360)
-    fps = 24
-
-    logging.info("Creating VideoWriter to: {}, {}fps, {}x{}px".format(outvideo, fps, res[0], res[1]))
-    disparityWriter = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, res)
-
-  computerValues = [
-    0, #16, # minDisp
-    16, #112-16, # numDisp
-    3, #3, # blockSize
-    0, #8*3*3**2, # p1
-    0, #32*3*3**2, # p2
-    0, #1, #disp12MaxDiff
-    0, #10, #uniquenessRatio
-    0, #100, #speckleWindowSize
-    0 #32 #speckleRange
-  ]
-
-  computer = Computer(*computerValues)
-
-  # GUI
-
-
-  blockSizeVals = [1,3,5,7,9,11,13,15,17,19]
+def createGui(computer, computerValues):
   cv2.namedWindow("GUI")
 
-  
   def onMinDisp(val):    
     computerValues[0] = val
     computer.set(*computerValues)
@@ -257,6 +214,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 
   cv2.createTrackbar("numDisparities", "GUI", 100, 100, onDispVal)
 
+  blockSizeVals = [1,3,5,7,9,11,13,15,17,19]
 
   def onBlockSize(val):    
     computerValues[2] = blockSizeVals[val]
@@ -301,6 +259,50 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     computer.set(*computerValues)
 
   cv2.createTrackbar("speckleRange", "GUI", computerValues[8], 6, onSpeckleRange)
+
+def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None, loop=False, showinput=False, gray=True):
+  logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
+
+  # input streams
+  streams = []
+  calibfile = CalibrationFile(calibrationFilePath) if calibrationFilePath else None
+
+  for vid_path in video_paths:
+    calibdata = calibfile.getDataForVideoId(vid_path) if calibfile else None
+    streams.append(Stream(vid_path, calibdata))
+
+  # disparity output writer
+  disparityWriter = None
+  if outvideo:
+    VIDEO_TYPE = {
+      'avi': cv2.VideoWriter_fourcc(*'XVID'),
+      #'mp4': cv2.VideoWriter_fourcc(*'H264'),
+      'mp4': cv2.VideoWriter_fourcc(*'XVID'),
+    }
+
+    res = (640,360)
+    fps = 24
+
+    logging.info("Creating VideoWriter to: {}, {}fps, {}x{}px".format(outvideo, fps, res[0], res[1]))
+    disparityWriter = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, res)
+
+  computerValues = [
+    0, #16, # minDisp
+    16, #112-16, # numDisp
+    3, #3, # blockSize
+    0, #8*3*3**2, # p1
+    0, #32*3*3**2, # p2
+    0, #1, #disp12MaxDiff
+    0, #10, #uniquenessRatio
+    0, #100, #speckleWindowSize
+    0 #32 #speckleRange
+  ]
+
+  computer = Computer(*computerValues)
+
+  # GUI
+
+  createGui(computer, computerValues)
 
   
   logging.info("Starting playback, press <ESC> or 'Q' or CTRL+C to stop, <SPACE> to pause and 'S' to save a frame...")

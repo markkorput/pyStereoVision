@@ -7,14 +7,19 @@ from datetime import datetime
 from .utils.CalibrationFile import CalibrationFile
 
 class Stream:
-  def __init__(self, input, output, calibdata, loop=True):
+  def __init__(self, input, output, loop=True):
     self.id = input
     self.cap = self.createVideoCapture()
-
-    self.calibrationdata = calibdata
-    self.done = False
     self.writer = None
     self.loop = loop
+
+    self.params = {
+      'blur-toggle': 0,
+      'blur-x': 0,
+      'blur-y': 0,
+      'blur-sigma-x': 0,
+      'blur-sigma-y': 0
+    }
 
     if output:
       if output == 'auto':
@@ -48,7 +53,7 @@ class Stream:
   def createVideoCapture(self):
     return cv2.VideoCapture(int(self.id) if self.id.isdigit() else self.id)
 
-  def update(self, captureRef=False, gaussianBlur=None):
+  def update(self, captureRef=False):
     ret, frame = self.cap.read()
     if not ret:
       if self.loop:
@@ -67,10 +72,9 @@ class Stream:
       return self.lastCapturedFrame
 
     frame = cv2.absdiff(frame, self.refFrame)
-    if gaussianBlur:
-      frame = cv2.GaussianBlur(frame, *gaussianBlur) # (3, 3), 0)
+    if self.params['blur-toggle'] and self.params['blur-x'] > 0 and self.params['blur-y'] > 0:
+      frame = cv2.GaussianBlur(frame, (self.params['blur-x'],self.params['blur-y']), self.params['blur-sigma-x'], self.params['blur-sigma-y'])
     # edges = cv2.Canny(diff, 100, 200)
-
 
     if self.writer:
       self.writer.write(self.lastProcessedFrame)
@@ -78,22 +82,23 @@ class Stream:
     self.lastProcessedFrame = frame
     return frame
 
-def get_undistort(img, calibdata, crop=True):
-  ret, mtx, dist, rvecs, tvecs = calibdata
-  h,  w = img.shape[:2]  
-  # img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-  
-  newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+def createGui(streams):
 
-  # undistort
-  dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+  for s in streams:
+    winid = 'GUI-{}'.format(s.id)
+    cv2.namedWindow(winid)
 
-  # crop the image
-  if crop:
-    x,y,w,h = roi
-    dst = dst[y:y+h, x:x+w]
-  return dst
+    def addTrackbar(param, max, valueProc=None):
+      def onValue(val):
+        s.params[param] = valueProc(val) if valueProc else val
+      cv2.createTrackbar(param, winid, s.params[param], max, onValue)
 
+    blurvalues = [0,1,3,5,7,9,11,13,15,17,19]
+    addTrackbar('blur-toggle', 1)
+    addTrackbar('blur-x', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
+    addTrackbar('blur-y', len(blurvalues)-1, valueProc=lambda v: blurvalues[v])
+    addTrackbar('blur-sigma-x', 10)
+    addTrackbar('blur-sigma-y', 10)
 
 def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
@@ -105,12 +110,14 @@ def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbo
     logging.warning('Number of inputs ({}: {}) doesn\'t match with number of outputs ({}: {})'.format(len(inputs), inputs, len(outputs), outputs))
     return
 
-  calibfile = CalibrationFile(calibrationFilePath)
+  # calibfile = CalibrationFile(calibrationFilePath)
   streams = []
 
   for idx, inp in enumerate(inputs):
-    calibdata = calibfile.getDataForVideoId(inp)
-    streams.append(Stream(inp, outputs[idx] if outputs else None, calibdata))
+    # calibdata = calibfile.getDataForVideoId(inp)
+    streams.append(Stream(inp, outputs[idx] if outputs else None))
+
+  createGui(streams)
 
   logging.info("Starting undistort playback, press <ESC> or 'Q' or CTRL+C to stop, <SPACE> to pause and 'S' to save a frame...")
   isPaused = False
@@ -127,7 +134,7 @@ def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbo
           
           # isDone = update(streams, crop, frameCallback)
           for s in streams:
-            frame = s.update(captureRef=captureRef, gaussianBlur=None) #((3,3),0))
+            frame = s.update(captureRef=captureRef)
             cv2.imshow('Input: {} - Press R to (re-)set reference frame'.format(s.id), frame)
 
           captureRef = False
