@@ -31,7 +31,7 @@ class Stream:
       'canny-threshold1': 79,
       'canny-threshold2': 143,
 
-      'blur2-enabled': 1,
+      'blur2-enabled': 0,
       'blur2-x': 5,
       'blur2-y': 5
     }
@@ -122,38 +122,39 @@ def createGui(streams):
   for idx, s in enumerate(streams):
     winid = 'GUI-{}'.format(s.id)
     cv2.namedWindow(winid, cv2.WINDOW_NORMAL)
-
-    def addStreamParam(param, max=None, initialValue=None, valueProc=None, values=None):
-      if values:
-        max = len(values)-1
-        valueProc = lambda v: values[v]
-        initialValue = values.index(s.params[param])
-
-      def onValue(val):
-        s.params[param] = valueProc(val) if valueProc else val
-      cv2.createTrackbar(param, winid, initialValue if initialValue != None else s.params[param], max, onValue)
-
-    addStreamParam('invert-enabled', 1)
-    addStreamParam('threshold-enabled', 1)
-    addStreamParam('threshold-thresh', 255)
-    addStreamParam('threshold-maxval', 255)
-    addStreamParam('threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
-    addStreamParam('blur-enabled', 1)
-    addStreamParam('blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
-    addStreamParam('blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
-    addStreamParam('blur-sigma-x', 10)
-    addStreamParam('blur-sigma-y', 10)
-    addStreamParam('canny-enabled', 1)
-    addStreamParam('canny-threshold1', 500)
-    addStreamParam('canny-threshold2', 500)
-    addStreamParam('blur2-enabled', 0)
-    addStreamParam('blur2-x', 10)
-    addStreamParam('blur2-y', 10)
-
     cv2.moveWindow(winid, 5, 5 + 400*idx)
     cv2.resizeWindow(winid, 500,400)
     # cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
     cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_NORMAL)
+
+    # convenience method for creating stream-param manipulating trackbars
+    def addStreamParam(stream, param, max=None, initialValue=None, valueProc=None, values=None):
+      if values:
+        max = len(values)-1
+        valueProc = lambda v: values[v]
+        initialValue = values.index(stream.params[param])
+
+      def onValue(val):
+        stream.params[param] = valueProc(val) if valueProc else val
+      cv2.createTrackbar(param, winid, initialValue if initialValue != None else stream.params[param], max, onValue)
+
+    addStreamParam(s, 'invert-enabled', 1)
+    addStreamParam(s, 'threshold-enabled', 1)
+    addStreamParam(s, 'threshold-thresh', 255)
+    addStreamParam(s, 'threshold-maxval', 255)
+    addStreamParam(s, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+    addStreamParam(s, 'blur-enabled', 1)
+    addStreamParam(s, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
+    addStreamParam(s, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
+    addStreamParam(s, 'blur-sigma-x', 10)
+    addStreamParam(s, 'blur-sigma-y', 10)
+    addStreamParam(s, 'canny-enabled', 1)
+    addStreamParam(s, 'canny-threshold1', 500)
+    addStreamParam(s, 'canny-threshold2', 500)
+    addStreamParam(s, 'blur2-enabled', 1)
+    addStreamParam(s, 'blur2-x', 10)
+    addStreamParam(s, 'blur2-y', 10)
+
 
 def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
