@@ -14,21 +14,33 @@ class Stream:
     self.loop = loop
 
     self.params = {
+      'grayscale-enabled': 1,
+
       'lerp-enabled': 1,
       'lerp-factor': 0.0075,
 
       'invert-enabled': 0,
-
-      'threshold-enabled': 1,
-      'threshold-thresh': 80,
-      'threshold-maxval': 98,
-      'threshold-type': cv2.THRESH_BINARY, #cv2.THRESH_TRUNC,
 
       'blur-enabled': 1,
       'blur-x': 5,
       'blur-y': 5,
       'blur-sigma-x': 0,
       'blur-sigma-y': 0,
+
+      'diff-enabled': 1,
+
+      'threshold-enabled': 1,
+      'threshold-thresh': 80,
+      'threshold-maxval': 98,
+      'threshold-type': cv2.THRESH_BINARY, #cv2.THRESH_TRUNC,
+
+      'dilation-enabled': 0,
+      'dilation-kernel-value': 6,
+      'dilation-iterations': 2,
+
+      'contours-enabled': 0,
+      'contours-mode': cv2.RETR_EXTERNAL,
+      'contours-method': cv2.CHAIN_APPROX_SIMPLE,
 
       'canny-enabled': 1,
       'canny-threshold1': 79,
@@ -80,6 +92,10 @@ class Stream:
         self.cap = self.createVideoCapture()
       return self.lastCapturedFrame
 
+    # grayscale?
+    if self.params['grayscale-enabled']:
+      frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+
     self.lastCapturedFrame = frame
     
     if captureRef:
@@ -95,20 +111,29 @@ class Stream:
       f = self.params['lerp-factor']
       self.refFrame = cv2.addWeighted(self.refFrame, 1.0 - f, self.lastCapturedFrame, f, 0.0)
 
-    # diff
-    frame = cv2.absdiff(frame, self.refFrame)
-
     # invert?
     if self.params['invert-enabled']:
       frame = (255-frame)
+
+    # blur?
+    if self.params['blur-enabled'] and self.params['blur-x'] > 0 and self.params['blur-y'] > 0:
+      frame = cv2.GaussianBlur(frame, (self.params['blur-x'],self.params['blur-y']), self.params['blur-sigma-x'], self.params['blur-sigma-y'])
+
+    # diff
+    if self.params['diff-enabled']:
+      frame = cv2.absdiff(frame, self.refFrame)
 
     # threshold?
     if self.params['threshold-enabled']:
       ret,frame = cv2.threshold(frame, self.params['threshold-thresh'], self.params['threshold-maxval'],self.params['threshold-type'])
 
-    # blur?
-    if self.params['blur-enabled'] and self.params['blur-x'] > 0 and self.params['blur-y'] > 0:
-      frame = cv2.GaussianBlur(frame, (self.params['blur-x'],self.params['blur-y']), self.params['blur-sigma-x'], self.params['blur-sigma-y'])
+    if self.params['dilation-enabled']:
+      val = self.params['dilation-kernel-value']
+      kernel = np.ones((val, val),np.uint8)
+      frame = cv2.dilate(frame, kernel, iterations=self.params['dilation-iterations'])
+
+    if self.params['contours-enabled']:
+      frame = cv2.findContours(frame, self.params['contours-mode'], self.params['contours-method'])
 
     # canny edge-detection?
     if self.params['canny-enabled']:
@@ -117,7 +142,6 @@ class Stream:
      # blur2?
     if self.params['blur2-enabled'] and self.params['blur2-x'] > 0 and self.params['blur2-y'] > 0:
       frame = cv2.blur(frame, (self.params['blur2-x'],self.params['blur2-y']))
-
     
     # write frame to ouput?
     if self.writer:
@@ -155,21 +179,39 @@ def createGui(streams):
         stream.params[param] = valueProc(val) if valueProc else val
       cv2.createTrackbar(param, winid, initialValue if initialValue != None else readProc(stream.params[param]), max, onValue)
 
+    addStreamParam(s, 'grayscale-enabled', 1)
+
     addStreamParam(s, 'lerp-enabled', 1)
     addStreamParam(s, 'lerp-factor', factor=2000)
+
     addStreamParam(s, 'invert-enabled', 1)
-    addStreamParam(s, 'threshold-enabled', 1)
-    addStreamParam(s, 'threshold-thresh', 255)
-    addStreamParam(s, 'threshold-maxval', 255)
-    addStreamParam(s, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+
     addStreamParam(s, 'blur-enabled', 1)
     addStreamParam(s, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
     addStreamParam(s, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
     addStreamParam(s, 'blur-sigma-x', 10)
     addStreamParam(s, 'blur-sigma-y', 10)
+
+    addStreamParam(s, 'diff-enabled', 1)
+
+    addStreamParam(s, 'threshold-enabled', 1)
+    addStreamParam(s, 'threshold-thresh', 255)
+    addStreamParam(s, 'threshold-maxval', 255)
+    addStreamParam(s, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+
+    addStreamParam(s, 'dilation-enabled', 1)
+    addStreamParam(s, 'dilation-kernel-value', 20)
+    addStreamParam(s, 'dilation-iterations', 10)
+
+
+    addStreamParam(s, 'contours-enabled', 1)
+    addStreamParam(s, 'contours-mode', values=[cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL])
+    addStreamParam(s, 'contours-method', values=[cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
+
     addStreamParam(s, 'canny-enabled', 1)
     addStreamParam(s, 'canny-threshold1', 500)
     addStreamParam(s, 'canny-threshold2', 500)
+
     addStreamParam(s, 'blur2-enabled', 1)
     addStreamParam(s, 'blur2-x', 10)
     addStreamParam(s, 'blur2-y', 10)
