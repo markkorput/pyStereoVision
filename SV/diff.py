@@ -14,9 +14,12 @@ class Stream:
     self.loop = loop
 
     self.params = {
-      'invert-enabled': False,
+      'lerp-enabled': 1,
+      'lerp-factor': 0.0075,
 
-      'threshold-enabled': True,
+      'invert-enabled': 0,
+
+      'threshold-enabled': 1,
       'threshold-thresh': 80,
       'threshold-maxval': 98,
       'threshold-type': cv2.THRESH_BINARY, #cv2.THRESH_TRUNC,
@@ -70,6 +73,7 @@ class Stream:
 
   def update(self, captureRef=False):
     ret, frame = self.cap.read()
+
     if not ret:
       if self.loop:
         logging.info("Looping {}".format(self.id))
@@ -85,6 +89,11 @@ class Stream:
     if type(self.refFrame) == type(None):
       # logging.info('Not ref frame for input: {}'.format(self.id))
       return self.lastCapturedFrame
+
+    # lerp?
+    if self.params['lerp-enabled']:
+      f = self.params['lerp-factor']
+      self.refFrame = cv2.addWeighted(self.refFrame, 1.0 - f, self.lastCapturedFrame, f, 0.0)
 
     # diff
     frame = cv2.absdiff(frame, self.refFrame)
@@ -128,16 +137,26 @@ def createGui(streams):
     cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_NORMAL)
 
     # convenience method for creating stream-param manipulating trackbars
-    def addStreamParam(stream, param, max=None, initialValue=None, valueProc=None, values=None):
+    def addStreamParam(stream, param, max=None, initialValue=None, valueProc=None, values=None, factor=None, readProc=None):
+      if factor:
+        max = factor
+        valueProc = lambda v: float(v) / factor
+        readProc = lambda v: int(v * factor)
+
       if values:
         max = len(values)-1
         valueProc = lambda v: values[v]
         initialValue = values.index(stream.params[param])
 
+      if not readProc:
+        readProc = lambda v: int(v)
+
       def onValue(val):
         stream.params[param] = valueProc(val) if valueProc else val
-      cv2.createTrackbar(param, winid, initialValue if initialValue != None else stream.params[param], max, onValue)
+      cv2.createTrackbar(param, winid, initialValue if initialValue != None else readProc(stream.params[param]), max, onValue)
 
+    addStreamParam(s, 'lerp-enabled', 1)
+    addStreamParam(s, 'lerp-factor', factor=2000)
     addStreamParam(s, 'invert-enabled', 1)
     addStreamParam(s, 'threshold-enabled', 1)
     addStreamParam(s, 'threshold-thresh', 255)
