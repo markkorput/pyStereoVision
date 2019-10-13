@@ -38,11 +38,15 @@ class Stream:
       'dilation-kernel-value': 6,
       'dilation-iterations': 2,
 
-      'contours-enabled': 0,
+      'contours-enabled': 1,
       'contours-mode': cv2.RETR_EXTERNAL,
       'contours-method': cv2.CHAIN_APPROX_SIMPLE,
+      'contours-drawlines': 0,
+      'contours-linethickness': 1,
+      'contours-drawboxes': 1,
+      'contours-minsize': 0,
 
-      'canny-enabled': 1,
+      'canny-enabled': 0,
       'canny-threshold1': 79,
       'canny-threshold2': 143,
 
@@ -102,10 +106,6 @@ class Stream:
       self.refFrame = self.lastCapturedFrame
       logging.info('Captured ref frame for input: {}'.format(self.id))
 
-    if type(self.refFrame) == type(None):
-      # logging.info('Not ref frame for input: {}'.format(self.id))
-      return self.lastCapturedFrame
-
     # lerp?
     if self.params['lerp-enabled']:
       f = self.params['lerp-factor']
@@ -120,7 +120,7 @@ class Stream:
       frame = cv2.GaussianBlur(frame, (self.params['blur-x'],self.params['blur-y']), self.params['blur-sigma-x'], self.params['blur-sigma-y'])
 
     # diff
-    if self.params['diff-enabled']:
+    if self.params['diff-enabled'] and type(self.refFrame) != type(None):
       frame = cv2.absdiff(frame, self.refFrame)
 
     # threshold?
@@ -133,7 +133,15 @@ class Stream:
       frame = cv2.dilate(frame, kernel, iterations=self.params['dilation-iterations'])
 
     if self.params['contours-enabled']:
-      frame = cv2.findContours(frame, self.params['contours-mode'], self.params['contours-method'])
+      contours,hierarchy = cv2.findContours(frame, self.params['contours-mode'], self.params['contours-method'])
+      if self.params['contours-drawlines']:
+        frame = cv2.drawContours(frame,contours,-1,(255,255,0),self.params['contours-linethickness'])
+      if self.params['contours-drawboxes']:
+        minsize = self.params['contours-minsize']
+        for c in contours:
+          bx,by,bw,bh = cv2.boundingRect(c)
+          if minsize == 0 or (bw*bh) >= minsize:
+            frame = cv2.rectangle(frame,(bx,by),(bx+bw,by+bh),(255,255,0),self.params['contours-linethickness'])
 
     # canny edge-detection?
     if self.params['canny-enabled']:
@@ -142,7 +150,7 @@ class Stream:
      # blur2?
     if self.params['blur2-enabled'] and self.params['blur2-x'] > 0 and self.params['blur2-y'] > 0:
       frame = cv2.blur(frame, (self.params['blur2-x'],self.params['blur2-y']))
-    
+
     # write frame to ouput?
     if self.writer:
       self.writer.write(self.lastProcessedFrame)
@@ -203,10 +211,13 @@ def createGui(streams):
     addStreamParam(s, 'dilation-kernel-value', 20)
     addStreamParam(s, 'dilation-iterations', 10)
 
-
     addStreamParam(s, 'contours-enabled', 1)
     addStreamParam(s, 'contours-mode', values=[cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL])
     addStreamParam(s, 'contours-method', values=[cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
+    addStreamParam(s, 'contours-drawlines', 1)
+    addStreamParam(s, 'contours-linethickness', values=[-1,0,1,2,3,4,5])
+    addStreamParam(s, 'contours-drawboxes', 1)
+    addStreamParam(s, 'contours-minsize', 4000)
 
     addStreamParam(s, 'canny-enabled', 1)
     addStreamParam(s, 'canny-threshold1', 500)
@@ -252,7 +263,7 @@ def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbo
           # isDone = update(streams, crop, frameCallback)
           for s in streams:
             frame = s.update(captureRef=captureRef)
-            cv2.imshow('Input: {} - Press R to (re-)set reference frame'.format(s.id), frame)
+            cv2.imshow('Input: {} - Press R to (re-)set reference frame'.format(str(s.id)), frame)
 
           captureRef = False
 
