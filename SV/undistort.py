@@ -56,12 +56,13 @@ def get_undistort(img, calibdata, crop=True):
 
   # undistort
   dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+  
+  if not crop:
+    return dst
 
   # crop the image
-  if crop:
-    x,y,w,h = roi
-    dst = dst[y:y+h, x:x+w]
-  return dst
+  x,y,w,h = roi
+  return dst[y:y+h, x:x+w]
 
 def update(streams, crop, frameCallback):
   for s in streams:

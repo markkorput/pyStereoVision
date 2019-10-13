@@ -5,6 +5,7 @@ import numpy as np
 from optparse import OptionParser
 from datetime import datetime
 from .utils.CalibrationFile import CalibrationFile
+from .undistort import get_undistort
 
 DEFAULTS = {
   'invideos': ['saved-media/base75mm-pattern22mm-short_L-UNDISTORTED.avi','saved-media/base75mm-pattern22mm-short_R-UNDISTORTED.avi'],
@@ -132,21 +133,21 @@ class Computer:
     return filteredImg
 
 
-def get_undistort(img, calibdata, crop=True):
-  ret, mtx, dist, rvecs, tvecs = calibdata
-  h,  w = img.shape[:2]  
-  # img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+# def get_undistort(img, calibdata, crop=True):
+#   ret, mtx, dist, rvecs, tvecs = calibdata
+#   h,  w = img.shape[:2]  
+#   # img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
   
-  newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+#   newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
 
-  # undistort
-  dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+#   # undistort
+#   dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
 
-  # crop the image
-  if crop:
-    x,y,w,h = roi
-    dst = dst[y:y+h, x:x+w]
-  return dst
+#   # crop the image
+#   if crop:
+#     x,y,w,h = roi
+#     dst = dst[y:y+h, x:x+w]
+#   return dst
 
 def update(streams, computer, crop, showinput, gray, disparityFrameCallback):
   frames = []
@@ -301,7 +302,6 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   computer = Computer(*computerValues)
 
   # GUI
-
   createGui(computer, computerValues)
 
   
@@ -380,8 +380,8 @@ if __name__ == '__main__':
                     help="Crop undistorted images when previewing calibration results")
 
   parser.add_option("-L", "--Loop",
-                    action="store_true", dest="loop", default=DEFAULTS['loop'],
-                    help="Loop input videos")
+                    action="store_false", dest="loop", default=DEFAULTS['loop'],
+                    help="Don't loop input videos")
 
   parser.add_option("-s", "--show-input",
                     action="store_true", dest="showinput", default=False,
