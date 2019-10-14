@@ -30,8 +30,8 @@ class Stream:
       'diff-enabled': 1,
 
       'threshold-enabled': 1,
-      'threshold-thresh': 80,
-      'threshold-maxval': 98,
+      'threshold-thresh': 10,
+      'threshold-maxval': 200,
       'threshold-type': cv2.THRESH_BINARY, #cv2.THRESH_TRUNC,
 
       'dilation-enabled': 0,
@@ -158,10 +158,13 @@ class Stream:
     self.lastProcessedFrame = frame
     return frame
 
+from SV.utils import addParamTrackbar
 def createGui(streams):
 
   for idx, s in enumerate(streams):
     winid = 'GUI-{}'.format(s.id)
+    params = s.params
+
     cv2.namedWindow(winid, cv2.WINDOW_NORMAL)
     cv2.moveWindow(winid, 5, 5 + 400*idx)
     cv2.resizeWindow(winid, 500,400)
@@ -187,45 +190,45 @@ def createGui(streams):
         stream.params[param] = valueProc(val) if valueProc else val
       cv2.createTrackbar(param, winid, initialValue if initialValue != None else readProc(stream.params[param]), max, onValue)
 
-    addStreamParam(s, 'grayscale-enabled', 1)
+    addParamTrackbar(winid, params, 'grayscale-enabled', 1)
 
-    addStreamParam(s, 'lerp-enabled', 1)
-    addStreamParam(s, 'lerp-factor', factor=2000)
+    addParamTrackbar(winid, params, 'lerp-enabled', 1)
+    addParamTrackbar(winid, params, 'lerp-factor', factor=2000)
 
-    addStreamParam(s, 'invert-enabled', 1)
+    addParamTrackbar(winid, params, 'invert-enabled', 1)
 
-    addStreamParam(s, 'blur-enabled', 1)
-    addStreamParam(s, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
-    addStreamParam(s, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
-    addStreamParam(s, 'blur-sigma-x', 10)
-    addStreamParam(s, 'blur-sigma-y', 10)
+    addParamTrackbar(winid, params, 'blur-enabled', 1)
+    addParamTrackbar(winid, params, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
+    addParamTrackbar(winid, params, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
+    addParamTrackbar(winid, params, 'blur-sigma-x', 10)
+    addParamTrackbar(winid, params, 'blur-sigma-y', 10)
 
-    addStreamParam(s, 'diff-enabled', 1)
+    addParamTrackbar(winid, params, 'diff-enabled', 1)
 
-    addStreamParam(s, 'threshold-enabled', 1)
-    addStreamParam(s, 'threshold-thresh', 255)
-    addStreamParam(s, 'threshold-maxval', 255)
-    addStreamParam(s, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+    addParamTrackbar(winid, params, 'threshold-enabled', 1)
+    addParamTrackbar(winid, params, 'threshold-thresh', 255)
+    addParamTrackbar(winid, params, 'threshold-maxval', 255)
+    addParamTrackbar(winid, params, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
 
-    addStreamParam(s, 'dilation-enabled', 1)
-    addStreamParam(s, 'dilation-kernel-value', 20)
-    addStreamParam(s, 'dilation-iterations', 10)
+    addParamTrackbar(winid, params, 'dilation-enabled', 1)
+    addParamTrackbar(winid, params, 'dilation-kernel-value', 20)
+    addParamTrackbar(winid, params, 'dilation-iterations', 10)
 
-    addStreamParam(s, 'contours-enabled', 1)
-    addStreamParam(s, 'contours-mode', values=[cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL])
-    addStreamParam(s, 'contours-method', values=[cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
-    addStreamParam(s, 'contours-drawlines', 1)
-    addStreamParam(s, 'contours-linethickness', values=[-1,0,1,2,3,4,5])
-    addStreamParam(s, 'contours-drawboxes', 1)
-    addStreamParam(s, 'contours-minsize', 4000)
+    addParamTrackbar(winid, params, 'contours-enabled', 1)
+    addParamTrackbar(winid, params, 'contours-mode', values=[cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL])
+    addParamTrackbar(winid, params, 'contours-method', values=[cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
+    addParamTrackbar(winid, params, 'contours-drawlines', 1)
+    addParamTrackbar(winid, params, 'contours-linethickness', values=[-1,0,1,2,3,4,5])
+    addParamTrackbar(winid, params, 'contours-drawboxes', 1)
+    addParamTrackbar(winid, params, 'contours-minsize', 4000)
 
-    addStreamParam(s, 'canny-enabled', 1)
-    addStreamParam(s, 'canny-threshold1', 500)
-    addStreamParam(s, 'canny-threshold2', 500)
+    addParamTrackbar(winid, params, 'canny-enabled', 1)
+    addParamTrackbar(winid, params, 'canny-threshold1', 500)
+    addParamTrackbar(winid, params, 'canny-threshold2', 500)
 
-    addStreamParam(s, 'blur2-enabled', 1)
-    addStreamParam(s, 'blur2-x', 10)
-    addStreamParam(s, 'blur2-y', 10)
+    addParamTrackbar(winid, params, 'blur2-enabled', 1)
+    addParamTrackbar(winid, params, 'blur2-x', 10)
+    addParamTrackbar(winid, params, 'blur2-y', 10)
 
 
 def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None):

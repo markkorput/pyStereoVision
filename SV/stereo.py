@@ -23,13 +23,11 @@ class Stream:
       self.cap.release()
       self.cap = None
 
-
-
 class Computer:
   def __init__(self, params=None):
     # self.timotheus = True
     # self.set(*args)
-    self.params = params if params else {
+    self.params = {
       'name': 'Default',
       'enabled': True,
       'minDisp': 0,
@@ -43,46 +41,13 @@ class Computer:
       'speckleWindowSize': 0,
       'preFilterCap': 63,
       'speckleRange': 32,
-      
+
       'wls-enabled': False,
       'wls-normalize': True
     }
 
-
-        # minDisparity=0,
-        # numDisparities=160,             # max_disp has to be dividable by 16 f. E. HH 192, 256
-        # blockSize=5,
-        # P1=8 * 3 * window_size ** 2,    # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
-        # P2=32 * 3 * window_size ** 2,
-        # disp12MaxDiff=1,
-        # uniquenessRatio=15,
-        # speckleWindowSize=0,
-        # speckleRange=2,
-        # preFilterCap=63,
-        # mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
-
-  # def set(self, minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange):
-  #   if self.timotheus:
-  #     self.timotheusInit(minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange)
-  #     return
-    
-  #   logging.info('Initializing stereo computer with values: {}'.format(
-  #     (numDisparities, blockSize, minDisp,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange)))
-
-  #   self.stereo = cv2.StereoSGBM_create(
-  #     minDisparity=minDisp,
-  #     numDisparities=numDisparities,
-  #     blockSize=blockSize,
-  #     P1=p1,
-  #     P2=p2,
-  #     disp12MaxDiff=disp12MaxDiff,
-  #     uniquenessRatio = uniquenessRatio,
-  #     speckleWindowSize = speckleWindowSize,
-  #     speckleRange = speckleRange,
-  #     preFilterCap=63,
-  #     mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
-
-  #   # self.stereo = cv2.StereoSGBM_create(minDisparity=minDisp, blockSize=blockSize)
+    if params:
+      self.params.update(params)
 
   def compute(self, imgL, imgR):
     # if self.timotheus:
@@ -103,6 +68,8 @@ class Computer:
 
     if not self.params['wls-enabled']:
       return stereo.compute(imgL, imgR)
+
+    # http://timosam.com/python_opencv_depthimage
 
     leftMatcher = stereo
     rightMatcher = cv2.ximgproc.createRightMatcher(leftMatcher)
@@ -132,71 +99,6 @@ class Computer:
     # cv2.waitKey()
     # cv2.destroyAllWindows()
     return filteredImg
-
-
-  # # http://timosam.com/python_opencv_depthimage
-  # def timotheusInit(self, minDisp, numDisparities, blockSize,p1,p2,disp12MaxDiff,uniquenessRatio,speckleWindowSize,speckleRange):
-  #   # SGBM Parameters -----------------
-  #   window_size = 3                     # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
-
-  #   # self.left_matcher = cv2.StereoSGBM_create(
-  #   #   minDisparity=minDisp,
-  #   #   numDisparities=numDisparities,
-  #   #   blockSize=blockSize,
-  #   #   P1=p1,
-  #   #   P2=p2,
-  #   #   disp12MaxDiff=disp12MaxDiff,
-  #   #   uniquenessRatio = uniquenessRatio,
-  #   #   speckleWindowSize = speckleWindowSize,
-  #   #   speckleRange = speckleRange,
-  #   #   preFilterCap=63,
-  #   #   mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
-
-  #   self.left_matcher = cv2.StereoSGBM_create(
-  #       minDisparity=0,
-  #       numDisparities=160,             # max_disp has to be dividable by 16 f. E. HH 192, 256
-  #       blockSize=5,
-  #       P1=8 * 3 * window_size ** 2,    # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
-  #       P2=32 * 3 * window_size ** 2,
-  #       disp12MaxDiff=1,
-  #       uniquenessRatio=15,
-  #       speckleWindowSize=0,
-  #       speckleRange=2,
-  #       preFilterCap=63,
-  #       mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
-  #   )
-
-  #   # This leads us to define the right_matcher so we can use it for our filtering later. This is a simple one-liner:
-  #   self.right_matcher = cv2.ximgproc.createRightMatcher(self.left_matcher)
-
-  #   # To obtain hole free depth-images we can use the WLS-Filter. This filter also requires some parameters which are shown below:
-
-  #   # FILTER Parameters
-  #   lmbda = 80000
-  #   sigma = 1.2
-  #   visual_multiplier = 1.0
-    
-  #   self.wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=self.left_matcher)
-  #   self.wls_filter.setLambda(lmbda)
-  #   self.wls_filter.setSigmaColor(sigma)
-  #   # Now we can compute the disparities and convert the resulting images to the desired int16 format or how OpenCV names it: CV_16S for our filter:
-
-  # def timotheusCompute(self, imgL, imgR, normalize=True):
-  #   displ = self.left_matcher.compute(imgL, imgR)  # .astype(np.float32)/16
-  #   dispr = self.right_matcher.compute(imgR, imgL)  # .astype(np.float32)/16
-  #   displ = np.int16(displ)
-  #   dispr = np.int16(dispr)
-  #   filteredImg = self.wls_filter.filter(displ, imgL, None, dispr)  # important to put "imgL" here!!!
-  #   # Finally if you show this image with imshow() you may not see anything. This is due to values being not normalized to a 8-bit format. So lets fix this by normalizing our depth map:
-
-  #   if normalize:
-  #     filteredImg = cv2.normalize(src=filteredImg, dst=filteredImg, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX);
-
-  #   filteredImg = np.uint8(filteredImg)
-  #   # cv2.imshow('Disparity Map', filteredImg)
-  #   # cv2.waitKey()
-  #   # cv2.destroyAllWindows()
-  #   return filteredImg
 
   def getStereoDisparity(self, frames):
     '''
@@ -277,8 +179,16 @@ def createGui(params, computers):
 
   addParamTrackbar(winid, params, 'gray', values=[False,True])
   addParamTrackbar(winid, params, 'calibrate-enabled', values=[False,True])
+  addParamTrackbar(winid, params, 'delay', factor=1000)
   addParamTrackbar(winid, params, 'show-input', values=[False,True])
+
+  addParamTrackbar(winid, params, 'threshold-enabled', 1)
+  addParamTrackbar(winid, params, 'threshold-thresh', 255)
+  addParamTrackbar(winid, params, 'threshold-maxval', 255)
+  addParamTrackbar(winid, params, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+
   addParamTrackbar(winid, params, 'show-disparity', values=[False,True])
+  addParamTrackbar(winid, params, 'write-output', values=[False,True])
 
   for idx, c in enumerate(computers):
     pars = c.params
@@ -315,6 +225,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 
   # disparity output writer
   disparityWriter = None
+
   if outvideo:
     VIDEO_TYPE = {
       'avi': cv2.VideoWriter_fourcc(*'XVID'),
@@ -329,15 +240,24 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     disparityWriter = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, res)
 
   params = {
+    'delay': delay if delay else 0.0,
     'gray': gray,
     'calibrate-enabled': calibfile != None,
     'show-input': showinput,
+
+    'threshold-enabled': 1,
+    'threshold-thresh': 80,
+    'threshold-maxval': 98,
+    'threshold-type': cv2.THRESH_TOZERO, # THRESH_TRUNC, #cv2.THRESH_TRUNC,
+
     'show-disparity': True,
-    'timotheus-enabled': True
+    'write-output': disparityWriter != None,
   }
 
   computers = [
-    Computer(),
+    Computer({
+      'enabled': False
+    }),
     Computer({
       'name': 'Timotheus',
       'enabled': True,
@@ -366,12 +286,17 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   saveframe = False
 
   def disparityFrameCallback(frame, computer):
+
+    # threshold?
+    if params['threshold-enabled']:
+      ret,frame = cv2.threshold(frame, params['threshold-thresh'], params['threshold-maxval'], params['threshold-type'])
+
     if params['show-disparity']:
       cv2.imshow('DISPARITY [{}]'.format(computer.params['name']), frame) #(frame - computerValues[0]) / computerValues[1])
 
     # if not saveframe:
       # return
-    if disparityWriter:
+    if disparityWriter and params['write-output']:
       disparityWriter.write(frame)
 
   try:
@@ -381,7 +306,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     while(True):
       if not isPaused:
         if time.time() > nextFrameTime:
-          
+
           isDone = update(streams, computers, params, crop, disparityFrameCallback)
 
           if isDone and loop:
@@ -391,8 +316,8 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
             logging.info('loop')
 
           saveframe = False
-          if delay:
-            nextFrameTime = time.time() + delay
+          if params['delay']:
+            nextFrameTime = time.time() + params['delay']
 
       # process user input
       key = cv2.waitKey(20) & 0xFF
