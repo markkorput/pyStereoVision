@@ -17,10 +17,11 @@ DEFAULTS = {
 }
 
 class Stream:
-  def __init__(self, vid_path, calibdata):
+  def __init__(self, vid_path, calibdata, gray=True):
     self.id = vid_path
     self.calibrationdata = calibdata
     self.init()
+    self.lastFrame = None
 
   def init(self):
     self.cap = cv2.VideoCapture(int(self.id) if self.id.isdigit() else self.id)
@@ -30,7 +31,7 @@ class Stream:
     if self.cap:
       self.cap.release()
       self.cap = None
-
+    
 class Computer:
   def __init__(self, *args):
     self.timotheus = True
@@ -115,7 +116,6 @@ class Computer:
     # Now we can compute the disparities and convert the resulting images to the desired int16 format or how OpenCV names it: CV_16S for our filter:
 
   def timotheusCompute(self, imgL, imgR, normalize=True):
-    print('computing disparity...')
     displ = self.left_matcher.compute(imgL, imgR)  # .astype(np.float32)/16
     dispr = self.right_matcher.compute(imgR, imgL)  # .astype(np.float32)/16
     displ = np.int16(displ)
@@ -131,7 +131,6 @@ class Computer:
     # cv2.waitKey()
     # cv2.destroyAllWindows()
     return filteredImg
-
 
 # def get_undistort(img, calibdata, crop=True):
 #   ret, mtx, dist, rvecs, tvecs = calibdata
@@ -149,63 +148,92 @@ class Computer:
 #     dst = dst[y:y+h, x:x+w]
 #   return dst
 
-def update(streams, computer, crop, showinput, gray, disparityFrameCallback):
-  frames = []
+def getStereoDisparity(frames, computer):
+  '''
+  Takes a list of two frames (left and right respectively) and returns a frame with the disparity (grayscale depth image) of the two frames
 
-  # for s in streams:
+  Args:
+    frames (list): two input frames, the first one should be the left "eye", the second one should be the right "eye"
+  '''
+
+  # make sure both frames have the same size
+  h1,w1 = frames[0].shape[:2]  
+  h2,w2 = frames[1].shape[:2]
+
+  if h1 != h2 or w1 != w2:
+    logging.info('Resizing left frame...') 
+    frames[0] = cv2.resize(frames[0], (w2,h2))
+
+  logging.debug('Computing disparity...')
+  disp = computer.compute(frames[0], frames[1]) #.astype(np.float32) / 16.0
+
+  # disp = getDisparity(pair[0], pair[1])
+  # cv2.imshow("DISPARITY", disp)
+  # cv2.imshow('DISPARITY', (disp-min_disp)/num_disp)
+  # disparityFrameCallback(disp)
+  return disp
+
+def update(streams, computer, params, crop, disparityFrameCallback):
+
+  # fetch image for all (both?) streams
   for s in streams:
     (retval, frame) = s.cap.read()
     if retval:
-      
-      undistorted_image = frame
-
-      if s.calibrationdata:
-        logging.info("Applying calbiration...")
-        undistorted_image = get_undistort(frame, s.calibrationdata, crop=crop)
-
-      if showinput:
-        cv2.imshow("{} - UNDISTORTED".format(s.id), undistorted_image)
-      #if s.writer:
-      #  s.writer.write(undistorted_image)
-      frames.append(undistorted_image)
+      s.lastFrame = frame
     else:
       s.done = True
 
+  frames = []
+
+  for s in streams:
+    f = s.lastFrame
+    if type(f) == type(None): continue
+
+    #for idx, f in enumerate(frames):
+    if params['gray']:
+      logging.debug("Converting to grayscale...")
+      f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+
+    if s.calibrationdata:
+      logging.debug("Applying calbiration...")
+      f = get_undistort(f, s.calibrationdata, crop=crop)
+
+    if params['show-input']:
+      cv2.imshow("Input: {}".format(s.id), f)
+
+    frames.append(f)
+
   if len(frames) == 2:
-
-    if gray:
-      logging.info("Converting to grayscale...")
-      frames[0] = cv2.cvtColor(frames[0], cv2.COLOR_BGR2GRAY)
-      frames[1] = cv2.cvtColor(frames[1], cv2.COLOR_BGR2GRAY)
-
-
-    h1,w1 = frames[0].shape[:2]  
-    h2,w2 = frames[1].shape[:2]
-
-    if h1 != h2 or w1 != w2:
-      logging.info('Resizing left frame...') 
-      frames[0] = cv2.resize(frames[0], (w2,h2))
-
-    logging.debug('Computing disparity...')
-    disp = computer.compute(frames[0], frames[1]) #.astype(np.float32) / 16.0
+    disp = getStereoDisparity(frames, computer)
 
     # disp = getDisparity(pair[0], pair[1])
     # cv2.imshow("DISPARITY", disp)
     # cv2.imshow('DISPARITY', (disp-min_disp)/num_disp)
     disparityFrameCallback(disp)
 
-
   return len(list(filter(lambda s: s.done == True, streams))) > 0
 
+from SV.utils import addParamTrackbar
 
-def createGui(computer, computerValues):
-  cv2.namedWindow("GUI")
+def createGui(params, computer, computerValues):
+  winid = 'Controls'
+
+  cv2.namedWindow(winid)
+  cv2.moveWindow(winid, 5, 5)
+  cv2.resizeWindow(winid, 500,400)
+
+
+  addParamTrackbar(winid, params, 'gray', values=[False,True])
+  addParamTrackbar(winid, params, 'calibrate-enabled', values=[False,True])
+  addParamTrackbar(winid, params, 'show-input', values=[False,True])
+  addParamTrackbar(winid, params, 'show-disparity', values=[False,True])
+
 
   def onMinDisp(val):    
     computerValues[0] = val
     computer.set(*computerValues)
 
-  cv2.createTrackbar("minDisp", "GUI", 16, 100, onMinDisp)
+  cv2.createTrackbar("minDisp", winid, 16, 100, onMinDisp)
 
 
   def onDispVal(val):    
@@ -213,7 +241,7 @@ def createGui(computer, computerValues):
     computerValues[1] = numDisparities
     computer.set(*computerValues)
 
-  cv2.createTrackbar("numDisparities", "GUI", 100, 100, onDispVal)
+  cv2.createTrackbar("numDisparities", winid, 100, 100, onDispVal)
 
   blockSizeVals = [1,3,5,7,9,11,13,15,17,19]
 
@@ -221,45 +249,45 @@ def createGui(computer, computerValues):
     computerValues[2] = blockSizeVals[val]
     computer.set(*computerValues)
 
-  cv2.createTrackbar("blockSize", "GUI", 1, len(blockSizeVals)-1, onBlockSize)
+  cv2.createTrackbar("blockSize", winid, 1, len(blockSizeVals)-1, onBlockSize)
 
   def onP1(val):    
     computerValues[3] = val
     computer.set(*computerValues)
 
-  cv2.createTrackbar("P1", "GUI", computerValues[3], 1000, onP1)
+  cv2.createTrackbar("P1", winid, computerValues[3], 1000, onP1)
 
   def onP2(val):    
     computerValues[4] = val
     computer.set(*computerValues)
 
-  cv2.createTrackbar("P2", "GUI", computerValues[4], 1000, onP2)
+  cv2.createTrackbar("P2", winid, computerValues[4], 1000, onP2)
 
 
   def onDiff(val):    
     computerValues[2] = val-1
     computer.set(*computerValues)
 
-  cv2.createTrackbar("disp12MaxDiff", "GUI", computerValues[5]+1, 101, onDiff)
+  cv2.createTrackbar("disp12MaxDiff", winid, computerValues[5]+1, 101, onDiff)
 
   def onRatio(val):    
     computerValues[6] = val
     computer.set(*computerValues)
 
-  cv2.createTrackbar("uniquenessRatio", "GUI", computerValues[6], 100, onRatio)
+  cv2.createTrackbar("uniquenessRatio", winid, computerValues[6], 100, onRatio)
 
 
   def onSpeckleWindowSize(val):    
     computerValues[7] = val
     computer.set(*computerValues)
 
-  cv2.createTrackbar("speckleWindowSize", "GUI", computerValues[7], 200, onSpeckleWindowSize)
+  cv2.createTrackbar("speckleWindowSize", winid, computerValues[7], 200, onSpeckleWindowSize)
 
   def onSpeckleRange(val):    
     computerValues[8] = val
     computer.set(*computerValues)
 
-  cv2.createTrackbar("speckleRange", "GUI", computerValues[8], 6, onSpeckleRange)
+  cv2.createTrackbar("speckleRange", winid, computerValues[8], 6, onSpeckleRange)
 
 def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None, loop=False, showinput=False, gray=True):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
@@ -287,6 +315,13 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     logging.info("Creating VideoWriter to: {}, {}fps, {}x{}px".format(outvideo, fps, res[0], res[1]))
     disparityWriter = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, res)
 
+  params = {
+    'gray': gray,
+    'calibrate-enabled': calibfile != None,
+    'show-input': showinput,
+    'show-disparity': True
+  }
+
   computerValues = [
     0, #16, # minDisp
     16, #112-16, # numDisp
@@ -302,7 +337,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   computer = Computer(*computerValues)
 
   # GUI
-  createGui(computer, computerValues)
+  createGui(params, computer, computerValues)
 
   
   logging.info("Starting playback, press <ESC> or 'Q' or CTRL+C to stop, <SPACE> to pause and 'S' to save a frame...")
@@ -310,7 +345,8 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   saveframe = False
 
   def disparityFrameCallback(frame):
-    cv2.imshow("DISPARITY", (frame - computerValues[0]) / computerValues[1])
+    if params['show-disparity']:
+      cv2.imshow("DISPARITY", (frame - computerValues[0]) / computerValues[1])
 
     # if not saveframe:
       # return
@@ -325,7 +361,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
       if not isPaused:
         if time.time() > nextFrameTime:
           
-          isDone = update(streams, computer, crop, showinput, gray, disparityFrameCallback)
+          isDone = update(streams, computer, params, crop, disparityFrameCallback)
 
           if isDone and loop:
             isDone = False
