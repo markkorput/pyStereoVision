@@ -23,11 +23,10 @@ class Stream:
       self.cap.release()
       self.cap = None
 
-class Computer:
+class Computer(dict):
   def __init__(self, params=None):
-    # self.timotheus = True
-    # self.set(*args)
-    self.params = {
+    self.params = self
+    self.update({
       'name': 'Default',
       'enabled': True,
       'minDisp': 0,
@@ -44,51 +43,66 @@ class Computer:
 
       'wls-enabled': False,
       'wls-normalize': True
-    }
+    })
 
     if params:
       self.params.update(params)
+    
+    self.isDirty = True
+
+  def __setitem__(self, key, value):
+    super().__setitem__(key, value)
+    self.isDirty = True
+    self.stereo = None
+    self.leftMatcher = None
+    self.rightMatcher = None
+    self.wls_filter = None
 
   def compute(self, imgL, imgR):
     # if self.timotheus:
     #   return self.timotheusCompute(*args)
+    dirty = self.isDirty
+    self.isDirty=False
 
-    stereo = cv2.StereoSGBM_create(
-      minDisparity=self.params['minDisp'],
-      numDisparities=self.params['numDisp'],
-      blockSize=self.params['blockSize'],
-      P1=8 * 3 * self.params['windowSize'] ** 2, # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
-      P2=32 * 3 * self.params['windowSize'] ** 2,
-      disp12MaxDiff=self.params['disp12MaxDiff'],
-      uniquenessRatio = self.params['uniquenessRatio'],
-      speckleWindowSize = self.params['speckleWindowSize'],
-      speckleRange = self.params['speckleRange'],
-      preFilterCap=self.params['preFilterCap'],
-      mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
+    if dirty:
+      logging.info('(re-)initializing stereo')
+      self.stereo = cv2.StereoSGBM_create(
+        minDisparity=self.params['minDisp'],
+        numDisparities=self.params['numDisp'],
+        blockSize=self.params['blockSize'],
+        P1=8 * 3 * self.params['windowSize'] ** 2, # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
+        P2=32 * 3 * self.params['windowSize'] ** 2,
+        disp12MaxDiff=self.params['disp12MaxDiff'],
+        uniquenessRatio = self.params['uniquenessRatio'],
+        speckleWindowSize = self.params['speckleWindowSize'],
+        speckleRange = self.params['speckleRange'],
+        preFilterCap=self.params['preFilterCap'],
+        mode = cv2.STEREO_SGBM_MODE_SGBM_3WAY)
 
     if not self.params['wls-enabled']:
-      return stereo.compute(imgL, imgR)
+      return self.stereo.compute(imgL, imgR)
 
     # http://timosam.com/python_opencv_depthimage
 
-    leftMatcher = stereo
-    rightMatcher = cv2.ximgproc.createRightMatcher(leftMatcher)
+    if dirty:
+      self.leftMatcher = self.stereo
+      self.rightMatcher = cv2.ximgproc.createRightMatcher(self.leftMatcher)
 
-    # FILTER Parameters
-    lmbda = 80000
-    sigma = 1.2
-    visual_multiplier = 1.0
-    
-    wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=leftMatcher)
-    wls_filter.setLambda(lmbda)
-    wls_filter.setSigmaColor(sigma)
-    # Now we can compute the disparities and conve
-    
-    displ = leftMatcher.compute(imgL, imgR)  # .astype(np.float32)/16
-    dispr = rightMatcher.compute(imgR, imgL)  # .astype(np.float32)/16
+      # FILTER Parameters
+      lmbda = 80000
+      sigma = 1.2
+      visual_multiplier = 1.0
+      
+      self.wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=self.leftMatcher)
+      self.wls_filter.setLambda(lmbda)
+      self.wls_filter.setSigmaColor(sigma)
+      # Now we can compute the disparities and conve
+      
+    displ = self.leftMatcher.compute(imgL, imgR)  # .astype(np.float32)/16
+    dispr = self.rightMatcher.compute(imgR, imgL)  # .astype(np.float32)/16
     displ = np.int16(displ)
     dispr = np.int16(dispr)
-    filteredImg = wls_filter.filter(displ, imgL, None, dispr)  # important to put "imgL" here!!!
+    filteredImg = self.wls_filter.filter(displ, imgL, None, dispr)  # important to put "imgL" here!!!
     # Finally if you show this image with imshow() you may not see anything. This is due to values being not normalized to a 8-bit format. So lets fix this by normalizing our depth map:
 
     if self.params['wls-normalize']:
