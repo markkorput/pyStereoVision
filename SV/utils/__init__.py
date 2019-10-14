@@ -1,4 +1,4 @@
-import cv2
+import cv2, json, logging
 
 
 def addParamTrackbar(winid, params, param, max=None, initialValue=None, valueProc=None, values=None, factor=None, readProc=None):
@@ -32,3 +32,52 @@ def addParamTrackbar(winid, params, param, max=None, initialValue=None, valuePro
   def onValue(val):
     params[param] = valueProc(val) if valueProc else val
   cv2.createTrackbar(param, winid, initialValue if initialValue != None else readProc(params[param]), max, onValue)
+
+
+def createParamsGuiWin(winid, params, file=None, load=None, save=None):
+  class Builder:
+    def __init__(self, winid, params, file=None, load=None, save=None):
+      self.winid = winid
+      self.params = params
+      self.file = file
+      self.load = load
+      self.save = save
+
+      cv2.namedWindow(self.winid)
+      # cv2.moveWindow(self.winid, 5, 5)
+      # cv2.resizeWindow(self.winid, 500,400)
+
+    # def __del__(self):
+    #   if self.file and self.save != False:
+    #     self._save()
+
+    def __enter__(self):
+      if self.file and self.load != False:
+        return
+
+      self._load()
+
+      return self
+
+    def __exit__(self, type, value, traceback):
+      pass
+
+    def _load(self):
+      # save params to file
+      logging.info('Loading params for gui win {} to file: {}'.format(self.winid, self.file))
+      json_data = {}
+      with open(file, 'r') as f:
+        json_data = json.load(f)
+      self.params.update(json_data)
+
+    # def _save(self):
+    #   # save params to file
+    #   logging.info('Writing params for gui win {} to file: {}'.format(self.winid, self.file))
+    #   with open(file, 'w') as f:
+    #     json.dump(self.params, f)
+
+    def add(self, paramname, *args, **kwargs):
+      return addParamTrackbar(self.winid, self.params, paramname, *args, **kwargs)
+
+  # create and return Builder instance 
+  return Builder(winid, params, file, load, save)

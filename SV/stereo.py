@@ -42,7 +42,8 @@ class Computer(dict):
       'speckleRange': 32,
 
       'wls-enabled': False,
-      'wls-normalize': True
+      'wls-normalize': True,
+      'wls-show-confmap': False
     })
 
     if params:
@@ -109,6 +110,11 @@ class Computer(dict):
       filteredImg = cv2.normalize(src=filteredImg, dst=filteredImg, beta=0, alpha=255, norm_type=cv2.NORM_MINMAX);
 
     filteredImg = np.uint8(filteredImg)
+
+    if self.params['wls-show-confmap']:
+      conf_map = self.wls_filter.getConfidenceMap()
+      cv2.imshow('confmap [{}]'.format(self.params['name']), conf_map)
+
     # cv2.imshow('Disparity Map', filteredImg)
     # cv2.waitKey()
     # cv2.destroyAllWindows()
@@ -160,6 +166,9 @@ def update(streams, computers, params, crop, disparityFrameCallback):
       logging.debug("Converting to grayscale...")
       f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
 
+    if params['resize-enabled']:
+      f = cv2.resize(f, (params['resize-width'],params['resize-height']))
+
     if s.calibrationdata:
       logging.debug("Applying calbiration...")
       f = get_undistort(f, s.calibrationdata, crop=crop)
@@ -182,7 +191,7 @@ def update(streams, computers, params, crop, disparityFrameCallback):
 
   return len(list(filter(lambda s: s.done == True, streams))) > 0
 
-from SV.utils import addParamTrackbar
+from SV.utils import addParamTrackbar, createParamsGuiWin
 
 def createGui(params, computers):
   winid = 'App'
@@ -191,18 +200,24 @@ def createGui(params, computers):
   cv2.moveWindow(winid, 5, 5)
   cv2.resizeWindow(winid, 500,400)
 
-  addParamTrackbar(winid, params, 'gray', values=[False,True])
-  addParamTrackbar(winid, params, 'calibrate-enabled', values=[False,True])
-  addParamTrackbar(winid, params, 'delay', factor=1000)
-  addParamTrackbar(winid, params, 'show-input', values=[False,True])
+  with createParamsGuiWin('App', params, file='saved-media/sereo.py.app.json') as gui:
+    gui.add('delay', factor=1000)
+    gui.add('gray', values=[False,True])
+    gui.add('calibrate-enabled', values=[False,True])
+    
+    gui.add('resize-enabled', values=[False,True])
+    gui.add('resize-width', 1920)
+    gui.add('resize-height', 1080)
+    
+    gui.add('show-input', values=[False,True])
 
-  addParamTrackbar(winid, params, 'threshold-enabled', 1)
-  addParamTrackbar(winid, params, 'threshold-thresh', 255)
-  addParamTrackbar(winid, params, 'threshold-maxval', 255)
-  addParamTrackbar(winid, params, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+    gui.add('threshold-enabled', 1)
+    gui.add('threshold-thresh', 255)
+    gui.add('threshold-maxval', 255)
+    gui.add('threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
 
-  addParamTrackbar(winid, params, 'show-disparity', values=[False,True])
-  addParamTrackbar(winid, params, 'write-output', values=[False,True])
+    gui.add('show-disparity', values=[False,True])
+    gui.add('write-output', values=[False,True])
 
   for idx, c in enumerate(computers):
     pars = c.params
@@ -225,6 +240,7 @@ def createGui(params, computers):
     addParamTrackbar(winid, pars, 'speckleRange', max=6)
     addParamTrackbar(winid, pars, 'wls-enabled', values=[False,True])
     addParamTrackbar(winid, pars, 'wls-normalize', values=[False,True])
+    addParamTrackbar(winid, pars, 'wls-show-confmap', values=[False,True])
 
 def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None, loop=False, showinput=False, gray=True):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
@@ -256,9 +272,11 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   params = {
     'delay': delay if delay else 0.0,
     'gray': gray,
+    'resize-enabled': False,
+    'resize-width': 640,
+    'resize-height': 480,
     'calibrate-enabled': calibfile != None,
     'show-input': showinput,
-
     'threshold-enabled': 1,
     'threshold-thresh': 80,
     'threshold-maxval': 98,
@@ -395,7 +413,6 @@ if __name__ == '__main__':
                     action="store_false", dest="gray", default=True,
                     help="Convert to grayscale before calculating disparity")
   
-
 
   (options, args) = parser.parse_args()
 
