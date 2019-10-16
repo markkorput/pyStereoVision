@@ -53,9 +53,7 @@ def createParamsGuiWin(winid, params, file=None, load=None, save=None):
 
     def __enter__(self):
       if self.file and self.load != False:
-        return
-
-      self._load()
+        self._load()  
 
       return self
 
