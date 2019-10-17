@@ -1,6 +1,12 @@
 import cv2, json, logging
 
 
+def isNone(var):
+  '''
+  utility method to be used with variables that might carry nparray values, which are a bit of a pain when comparing to None
+  '''
+  return type(var) == type(None)
+
 def addParamTrackbar(winid, params, param, max=None, initialValue=None, valueProc=None, values=None, factor=None, readProc=None):
   '''
   Convenience method for param manipulating trackbars
