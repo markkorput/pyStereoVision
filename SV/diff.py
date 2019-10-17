@@ -5,6 +5,7 @@ import numpy as np
 from optparse import OptionParser
 from datetime import datetime
 from .utils.CalibrationFile import CalibrationFile
+from .utils import isNone
 
 class Stream:
   def __init__(self, input, output, loop=True):
@@ -14,31 +15,31 @@ class Stream:
     self.loop = loop
 
     self.params = {
-      'grayscale-enabled': 1,
+      'grayscale-enabled': True,
 
-      'lerp-enabled': 1,
-      'lerp-factor': 0.0075,
+      'lerp-reframe-enabled': False,
+      'lerp-reframe-factor': 0.607,
 
-      'invert-enabled': 0,
+      'invert-enabled': False,
 
-      'blur-enabled': 1,
+      'blur-enabled': False,
       'blur-x': 5,
       'blur-y': 5,
       'blur-sigma-x': 0,
       'blur-sigma-y': 0,
 
-      'diff-enabled': 1,
+      'diff-enabled': True,
 
-      'threshold-enabled': 1,
+      'threshold-enabled': False,
       'threshold-thresh': 10,
       'threshold-maxval': 200,
       'threshold-type': cv2.THRESH_BINARY, #cv2.THRESH_TRUNC,
 
-      'dilation-enabled': 0,
-      'dilation-kernel-value': 6,
-      'dilation-iterations': 2,
+      'dilation-enabled': True,
+      'dilation-kernel-value': 7,
+      'dilation-iterations': 3,
 
-      'contours-enabled': 1,
+      'contours-enabled': False,
       'contours-mode': cv2.RETR_EXTERNAL,
       'contours-method': cv2.CHAIN_APPROX_SIMPLE,
       'contours-drawlines': 0,
@@ -46,13 +47,16 @@ class Stream:
       'contours-drawboxes': 1,
       'contours-minsize': 0,
 
-      'canny-enabled': 0,
-      'canny-threshold1': 79,
-      'canny-threshold2': 143,
+      'canny-enabled': True,
+      'canny-threshold1': 0,
+      'canny-threshold2': 82,
 
-      'blur2-enabled': 0,
+      'blur2-enabled': False,
       'blur2-x': 5,
-      'blur2-y': 5
+      'blur2-y': 5,
+
+      'lerp-result-enabled': True,
+      'lerp-result-factor': 0.607
     }
 
     if output:
@@ -75,6 +79,7 @@ class Stream:
     self.refFrame = None
     self.lastCapturedFrame = None
     self.lastProcessedFrame = None
+    self.lastResultFrame = None
 
   def __del__(self):
     if self.cap:
@@ -107,8 +112,8 @@ class Stream:
       logging.info('Captured ref frame for input: {}'.format(self.id))
 
     # lerp?
-    if self.params['lerp-enabled']:
-      f = self.params['lerp-factor']
+    if self.params['lerp-reframe-enabled']:
+      f = self.params['lerp-reframe-factor']
       self.refFrame = cv2.addWeighted(self.refFrame, 1.0 - f, self.lastCapturedFrame, f, 0.0)
 
     # invert?
@@ -151,11 +156,18 @@ class Stream:
     if self.params['blur2-enabled'] and self.params['blur2-x'] > 0 and self.params['blur2-y'] > 0:
       frame = cv2.blur(frame, (self.params['blur2-x'],self.params['blur2-y']))
 
+    # lerp?
+    if self.params['lerp-result-enabled'] and not isNone(self.lastResultFrame):
+      f = self.params['lerp-result-factor']
+      frame = cv2.addWeighted(self.lastResultFrame, 1.0 - f, frame, f, 0.0)
+
+    self.lastResultFrame = frame
+    self.lastProcessedFrame = frame
+
     # write frame to ouput?
     if self.writer:
       self.writer.write(self.lastProcessedFrame)
-    
-    self.lastProcessedFrame = frame
+
     return frame
 
 from SV.utils import addParamTrackbar
@@ -190,45 +202,49 @@ def createGui(streams):
         stream.params[param] = valueProc(val) if valueProc else val
       cv2.createTrackbar(param, winid, initialValue if initialValue != None else readProc(stream.params[param]), max, onValue)
 
-    addParamTrackbar(winid, params, 'grayscale-enabled', 1)
+    addParamTrackbar(winid, params, 'grayscale-enabled', values=[False, True])
 
-    addParamTrackbar(winid, params, 'lerp-enabled', 1)
-    addParamTrackbar(winid, params, 'lerp-factor', factor=2000)
+    addParamTrackbar(winid, params, 'lerp-reframe-enabled', values=[False, True])
+    addParamTrackbar(winid, params, 'lerp-reframe-factor', factor=2000)
 
     addParamTrackbar(winid, params, 'invert-enabled', 1)
 
-    addParamTrackbar(winid, params, 'blur-enabled', 1)
+    addParamTrackbar(winid, params, 'blur-enabled', values=[False, True])
     addParamTrackbar(winid, params, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
     addParamTrackbar(winid, params, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
     addParamTrackbar(winid, params, 'blur-sigma-x', 10)
     addParamTrackbar(winid, params, 'blur-sigma-y', 10)
 
-    addParamTrackbar(winid, params, 'diff-enabled', 1)
+    addParamTrackbar(winid, params, 'diff-enabled', values=[False, True])
 
-    addParamTrackbar(winid, params, 'threshold-enabled', 1)
+    addParamTrackbar(winid, params, 'threshold-enabled', values=[False, True])
     addParamTrackbar(winid, params, 'threshold-thresh', 255)
     addParamTrackbar(winid, params, 'threshold-maxval', 255)
     addParamTrackbar(winid, params, 'threshold-type', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
 
-    addParamTrackbar(winid, params, 'dilation-enabled', 1)
+    addParamTrackbar(winid, params, 'dilation-enabled', values=[False, True])
     addParamTrackbar(winid, params, 'dilation-kernel-value', 20)
     addParamTrackbar(winid, params, 'dilation-iterations', 10)
 
-    addParamTrackbar(winid, params, 'contours-enabled', 1)
+    addParamTrackbar(winid, params, 'contours-enabled', values=[False, True])
     addParamTrackbar(winid, params, 'contours-mode', values=[cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL])
     addParamTrackbar(winid, params, 'contours-method', values=[cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
-    addParamTrackbar(winid, params, 'contours-drawlines', 1)
+    addParamTrackbar(winid, params, 'contours-drawlines', values=[False, True])
     addParamTrackbar(winid, params, 'contours-linethickness', values=[-1,0,1,2,3,4,5])
     addParamTrackbar(winid, params, 'contours-drawboxes', 1)
     addParamTrackbar(winid, params, 'contours-minsize', 4000)
 
-    addParamTrackbar(winid, params, 'canny-enabled', 1)
+    addParamTrackbar(winid, params, 'canny-enabled', values=[False, True])
     addParamTrackbar(winid, params, 'canny-threshold1', 500)
     addParamTrackbar(winid, params, 'canny-threshold2', 500)
 
-    addParamTrackbar(winid, params, 'blur2-enabled', 1)
+    addParamTrackbar(winid, params, 'blur2-enabled', values=[False, True])
     addParamTrackbar(winid, params, 'blur2-x', 10)
     addParamTrackbar(winid, params, 'blur2-y', 10)
+
+    addParamTrackbar(winid, params, 'lerp-result-enabled', values=[False, True])
+    addParamTrackbar(winid, params, 'lerp-result-factor', factor=2000)
+
 
 
 def main(input, output=None, calibrationFilePath=None, crop=True, delay=0, verbose=False, outvideo=None):
