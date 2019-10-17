@@ -14,6 +14,9 @@ class Param:
     self.value = value
     self.changeEvent(self)
 
+  def type(self):
+    return type(self.value).__name__
+
 class ParamsBuilder:
   def __init__(self, params):
     self.params = params

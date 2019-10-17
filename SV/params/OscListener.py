@@ -1,5 +1,5 @@
 from .Params import Params, toDict
-import threading, logging, re
+import threading, logging, re, json
 from evento import Event
 
 
@@ -105,7 +105,6 @@ class OscServer:
     logging.debug('[OscServer {0}:{1}] received {2} [{3}]'.format(self.host, self.port, addr, ", ".join(map(lambda x: str(x), args))))
     self.messageEvent((addr, args))
 
-
 class AddrParser:
   def __init__(self, addr, scope=''):
     self.addr = addr
@@ -123,7 +122,6 @@ class AddrParser:
     path = '/'+'/'.join(self.unscoped().split('/')[2:])
     logging.info('Path: {}'.format(path))
     return path
-    
 
 class OscListener:
   def __init__(self, paramsList, port=8080, scope="", start=True):
@@ -172,7 +170,21 @@ class OscListener:
     parse['action'] = parse['unscoped'].split('/')[0]
     parse['path'] = '/'.join(parse['unscoped'].split('/')[1:])
 
+  def getJson(self):
+    items = []
+    for params in self.paramsList:
+      for p in params:
+        items.append({
+          'name': p.name,
+          'type': p.type(),
+          'default': p.default,
 
+          'setAddr': '{}/set/{}/{}'.format(self.scope, params.name, p.name)
+        })
+    
+    return json.dumps({
+      'params': items
+    })
 
 
 if __name__ == '__main__':
@@ -192,5 +204,4 @@ if __name__ == '__main__':
   oscServer.onMessage('/FooBar/set/Test/age', [33])
   print('After age change: {}'.format(toDict(params)))
 
-
-    
+  print('metadata.json: {}'.format(oscServer.getJson()))
