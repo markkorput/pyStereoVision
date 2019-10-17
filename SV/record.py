@@ -3,6 +3,7 @@
 
 import os, logging, cv2, time, math
 from optparse import OptionParser
+from .utils import isNone
 
 DEFAULTS = {
   'input': "0,1",
@@ -27,6 +28,20 @@ class Stream:
 
     self.cap = cv2.VideoCapture(int(self.input) if self.input.isdigit() else self.input)
 
+    self.writer = None
+    self.lastframe = None
+    self.firstWriteTime = None
+    self.writeFrameCount = 0
+
+  def __del__(self):
+    self.stopRec()
+
+    if self.cap:
+      logging.debug("Capture for {}".format(self.input))
+      self.cap.release()
+      self.cap = None
+
+  def startRec(self):
     STD_DIMENSIONS =  {
       "480p": (640, 480),
       "720p": (1280, 720),
@@ -53,20 +68,14 @@ class Stream:
     typ = VIDEO_TYPE[ext] if ext in VIDEO_TYPE else VIDEO_TYPE['avi']
     self.writer = cv2.VideoWriter(self.output, typ, self.fps, self.dimms)
 
-    self.lastframe = None
-    self.firstWriteTime = None
-    self.writeFrameCount = 0
-
-  def __del__(self):
-    if self.cap:
-      logging.debug("Capture for {}".format(self.input))
-      self.cap.release()
-      self.cap = None
-
+  def stopRec(self):
     if self.writer:
       logging.debug("Releasing writer for {}".format(self.output))
       self.writer.release()
       self.writer = None
+
+  def recIsStarted(self):
+    return not self.writer == None
 
   def read(self):
     # self.lastframe = s.cap.read()[1]
@@ -75,6 +84,9 @@ class Stream:
       self.lastframe = frame
 
   def write(self, grayscale=False, sync=True):
+    if not self.writer:
+      return
+
     frame = self.lastframe
     # Convert to grayscale?
     if grayscale:
@@ -97,7 +109,7 @@ class Stream:
         self.writer.write(frame)
         self.writeFrameCount += 1
 
-def main(input="0,1", output="saved-media/record-L.avi,saved-media/record-R.avi", res='720p', fps=25, grayscale=False, show=True, verbose=False, sync=False):
+def main(input="0,1", output="saved-media/record-L.avi,saved-media/record-R.avi", res='720p', fps=25, grayscale=False, show=True, verbose=False, sync=False, startRecording=True):
   logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
 
   ##### PRE-CHECK #####
@@ -116,6 +128,8 @@ def main(input="0,1", output="saved-media/record-L.avi,saved-media/record-R.avi"
   for idx, input in enumerate(inputs):
     stream = Stream(input, outputs[idx], res, fps)
     streams.append(stream)
+    if startRecording:
+      stream.startRec()
 
   ##### RECORD #####
 
@@ -138,12 +152,20 @@ def main(input="0,1", output="saved-media/record-L.avi,saved-media/record-R.avi"
         # Display the resulting frame
         if show:
           for s in streams:
-            cv2.imshow(s.input, s.lastframe)
+            if not isNone(s.lastframe):
+              cv2.imshow(s.input, s.lastframe)
 
         key = cv2.waitKey(3) & 0xFF
 
-        if key == ord('q') or key == 27:
-          break
+        if key != -1 and key != 255:
+          if key == ord('q') or key == 27:
+            break
+          if key == ord('r'):
+            for s in streams:
+              if s.recIsStarted():
+                s.stopRec()
+              else:
+                s.startRec()
 
   except KeyboardInterrupt:
     logging.debug("KeyboardInterrupt, stopping")
@@ -194,10 +216,14 @@ if __name__ == '__main__':
                     action="store_true", dest="sync", default=False,
                     help="Record additional frames if time syncing requires it")
 
+  parser.add_option("-R", "--no-rec",
+                    action="store_true", dest="norec", default=False,
+                    help="Don't auto-start recording")
+
   parser.add_option("-v", "--verbose",
                     action="store_true", dest="verbose", default=False,
                     help="Verbose logging")
 
   (opts, args) = parser.parse_args()
 
-  main(input=opts.input, output=opts.output, res=opts.RES, fps=opts.FPS, show=opts.SHOW, grayscale=opts.grayscale, verbose=opts.verbose, sync=opts.sync)
+  main(input=opts.input, output=opts.output, res=opts.RES, fps=opts.FPS, show=opts.SHOW, grayscale=opts.grayscale, verbose=opts.verbose, sync=opts.sync, startRecording=not opts.norec)

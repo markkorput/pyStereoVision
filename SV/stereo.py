@@ -128,7 +128,7 @@ class Computer(dict):
     '''
 
     # make sure both frames have the same size
-    h1,w1 = frames[0].shape[:2]  
+    h1,w1 = frames[0].shape[:2]
     h2,w2 = frames[1].shape[:2]
 
     if h1 != h2 or w1 != w2:
@@ -283,19 +283,6 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
   # disparity output writer
   disparityWriter = None
 
-  if outvideo:
-    VIDEO_TYPE = {
-      'avi': cv2.VideoWriter_fourcc(*'XVID'),
-      #'mp4': cv2.VideoWriter_fourcc(*'H264'),
-      'mp4': cv2.VideoWriter_fourcc(*'XVID'),
-    }
-
-    res = (640,360)
-    fps = 24
-
-    logging.info("Creating VideoWriter to: {}, {}fps, {}x{}px".format(outvideo, fps, res[0], res[1]))
-    disparityWriter = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, res)
-
   params = {
     'delay': delay if delay else 0.0,
     'gray': gray,
@@ -305,7 +292,8 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     'calibrate-enabled': calibfile != None,
     'show-input': showinput,
     'show-disparity': True,
-    'write-output': disparityWriter != None,
+    'write-output': False, # should be "started" manually disparityWriter != None,
+    'outWriter': None,
 
     # post process
     'threshold-enabled': True,
@@ -339,8 +327,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 
     'lastFrame': None,
     'lerp-enabled': False,
-    'lerp-factor': 0.0075,
-
+    'lerp-factor': 0.0075
   }
 
   computers = [
@@ -416,10 +403,27 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
     if params['show-disparity']:
       cv2.imshow('DISPARITY [{}]'.format(computer.params['name']), params['lastFrame']) #(frame - computerValues[0]) / computerValues[1])
 
-    # if not saveframe:
-      # return
-    if disparityWriter and params['write-output']:
-      disparityWriter.write(frame)
+    if params['write-output']:
+      if not params['outWriter'] and outvideo:
+        VIDEO_TYPE = {
+          'avi': cv2.VideoWriter_fourcc(*'XVID'),
+          #'mp4': cv2.VideoWriter_fourcc(*'H264'),
+          'mp4': cv2.VideoWriter_fourcc(*'XVID'),
+        }
+
+        res = params['lastFrame'].shape[:2]
+        fps = 24
+        logging.info("Creating VideoWriter to: {}, {}fps, res: {}".format(outvideo, fps, res))
+        params['outWriter'] = cv2.VideoWriter(outvideo, VIDEO_TYPE[os.path.splitext(outvideo)[1][1:]], fps, (res[1],res[0]), False)
+
+      if params['outWriter']:
+        # outf = cv2.cvtColor(params['lastFrame'], cv2.COLOR_BGR2GRAY)
+        params['outWriter'].write(params['lastFrame'])
+
+    elif params['outWriter']:
+      params['outWriter'].release()
+      params['outWriter'] = None
+      logging.info("Close VideoWriter to: {}".format(outvideo))
 
   try:
     # timing
@@ -468,6 +472,9 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
           verbose = not verbose
           logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format='%(asctime)s %(message)s')
  
+        elif key == ord('r'):
+          params['write-output'] = not params['write-output']
+
         else:
           logging.info('No action for key: {}'.format(key))
 
