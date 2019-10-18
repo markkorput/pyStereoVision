@@ -199,6 +199,7 @@ def createGui(params, computers):
   cv2.moveWindow(winid, 5, 5)
   cv2.resizeWindow(winid, 500,400)
 
+  
   with createParamsGuiWin('App', params) as gui:
     gui.add('delay', factor=1000)
     gui.add('gray', values=[False,True])

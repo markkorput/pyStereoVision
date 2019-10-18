@@ -1,7 +1,7 @@
 from .Params import Params, toDict
 import threading, logging, re, json
 from evento import Event
-
+from .OscClient import OscClient
 
 DEPS = None # {'osc_server': None, 'dispatcher': None}
 
@@ -140,6 +140,7 @@ class OscListener:
   def onMessage(self, addr, args):
     parser = AddrParser(addr, scope=self.scope)
 
+    # set param value message?
     # "/scope/set/Test/name", ('John')
     if parser.action() == 'set':
       path = parser.path()
@@ -155,6 +156,22 @@ class OscListener:
       value = args[0]
       logging.debug('Setting {} to {} (osc: {} {})'.format(p.name, value, addr, args))
       p.set(value)
+      return
+
+    # "/scope/info, ('127.0.0.1', 8085)
+    if parser.action() == 'info':
+      if len(args) < 3:
+        logging.warning('Received `info` OSC message with less than 3 arguments, ignoring')
+        return
+
+      host = args[0]
+      port = args[1]
+      addr = args[2]
+      json = self.getInfoJson()
+
+      # response client
+      client = OscClient(host, port)
+      client.send(addr, json)
 
   def getParamForPath(self, path):
     for params in self.paramsList:
@@ -170,7 +187,7 @@ class OscListener:
     parse['action'] = parse['unscoped'].split('/')[0]
     parse['path'] = '/'.join(parse['unscoped'].split('/')[1:])
 
-  def getJson(self):
+  def getInfoJson(self):
     items = []
     for params in self.paramsList:
       for p in params:
@@ -204,4 +221,4 @@ if __name__ == '__main__':
   oscServer.onMessage('/FooBar/set/Test/age', [33])
   print('After age change: {}'.format(toDict(params)))
 
-  print('metadata.json: {}'.format(oscServer.getJson()))
+  print('metadata.json: {}'.format(oscServer.getInfoJson()))
