@@ -30,7 +30,6 @@ def loadDeps():
 
 class OscServer:
   def __init__(self, port=8080, host=''):
-    self.params = params
     self.host = host
     self.port = port
     self.server = None
@@ -103,7 +102,7 @@ class OscServer:
 
   def _onOscMsg(self, addr, *args):
     logging.debug('[OscServer {0}:{1}] received {2} [{3}]'.format(self.host, self.port, addr, ", ".join(map(lambda x: str(x), args))))
-    self.messageEvent((addr, args))
+    self.messageEvent(addr, args)
 
 class AddrParser:
   def __init__(self, addr, scope=''):
@@ -115,16 +114,16 @@ class AddrParser:
 
   def action(self):
     action = self.unscoped().split('/')[1]
-    logging.info('Action: {}'.format(action))
+    # logging.info('Action: {}'.format(action))
     return action
 
   def path(self):
     path = '/'+'/'.join(self.unscoped().split('/')[2:])
-    logging.info('Path: {}'.format(path))
+    # logging.info('Path: {}'.format(path))
     return path
 
 class OscListener:
-  def __init__(self, paramsList, port=8080, scope="", start=True):
+  def __init__(self, paramsList, port=8081, scope="/PyParams", start=True):
     self.paramsList = [paramsList] if type(paramsList) == type(Params()) else paramsList
     self.scope = scope
     self.server = OscServer(port)
@@ -139,6 +138,7 @@ class OscListener:
 
   def onMessage(self, addr, args):
     parser = AddrParser(addr, scope=self.scope)
+    logging.debug('got {} message with: {}'.format(parser.action(), args))
 
     # set param value message?
     # "/scope/set/Test/name", ('John')
@@ -159,7 +159,7 @@ class OscListener:
       return
 
     # "/scope/info, ('127.0.0.1', 8085)
-    if parser.action() == 'info':
+    if parser.action() == 'info' or parser.action() == 'signup':
       if len(args) < 3:
         logging.warning('Received `info` OSC message with less than 3 arguments, ignoring')
         return
@@ -222,3 +222,8 @@ if __name__ == '__main__':
   print('After age change: {}'.format(toDict(params)))
 
   print('metadata.json: {}'.format(oscServer.getInfoJson()))
+
+  listener = OscListener(params)
+
+  while True:
+    pass

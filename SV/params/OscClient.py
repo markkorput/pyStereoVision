@@ -29,8 +29,8 @@ class OscClient:
   Osc sender client
   """
   def __init__(self, host, port):
-    self.host = None
-    self.port = 0
+    self.host = host
+    self.port = port
     self.client = None
 
     self.connectEvent = Event()
@@ -73,13 +73,13 @@ class OscClient:
       self.client = DEPS['udp_client'].SimpleUDPClient(host, port)
       self.connected = True
       self.connectEvent(self)
-      self.verbose('[OscClient {}:{}] connected'.format(self.host, self.port))
+      logging.debug('[OscClient {}:{}] connected'.format(self.host, self.port))
 
     if 'OSCClient' in DEPS:
       self.client = DEPS['OSCClient'](host, port)
       self.connected = True
       self.connectEvent(self)
-      self.verbose('[OscClient {}:{}] connected using OSCClient'.format(self.host, self.port))
+      logging.debug('[OscClient {}:{}] connected using OSCClient'.format(self.host, self.port))
 
     return True
 
@@ -90,7 +90,7 @@ class OscClient:
     # self.client.close()
     self.client = None
     self.disconnectEvent(self)
-    self.verbose('[OscClient {}:{}] disconnected'.format(self.host, self.port))
+    logging.debug('[OscClient {}:{}] disconnected'.format(self.host, self.port))
 
   def send(self, addr, args):
     if not self.isConnected():

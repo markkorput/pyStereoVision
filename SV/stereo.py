@@ -7,6 +7,7 @@ from datetime import datetime
 from .utils import isNone
 from .utils.CalibrationFile import CalibrationFile
 from .undistort import get_undistort
+from .params.OscListener import OscListener
 
 class Stream:
   def __init__(self, vid_path, calibdata, gray=True):
@@ -357,6 +358,7 @@ def main(video_paths, calibrationFilePath=None, crop=True, delay=0, verbose=Fals
 
   # GUI
   createGui(params, computers)
+  # listener = OscListener([params])
 
   def disparityFrameCallback(frame, computer):
 
