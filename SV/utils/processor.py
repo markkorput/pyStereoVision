@@ -98,6 +98,13 @@ def create_processor(data):
     return enhance(func)
 
   if typ == 'blur':
+    x = max(data['x'] if 'x' in data else 1, 1)
+    y = max(data['y'] if 'y' in data else 1, 1)
+    def func(f):
+      return cv2.Blur(f, (x,y))
+    return enhance(func)
+
+  if typ == 'gaussianblur':
     x = data['x'] if 'x' in data else 0.0
     y = data['y'] if 'y' in data else 0.0
     sx = data['sigma-x'] if 'sigma-x' in data else 10
@@ -235,17 +242,44 @@ def create_controlled_processor(winid, idx, data):
   ctrl('verbose', values=[False, True], default=False)
 
   typ = data['type'] if 'type' in data else None
-  # if typ == 'grayscale':
-  #   pass    
 
-  # if typ == 'invert':
-  #   pass    
+  if typ == 'reframe':
+    ctrl('factor', factor=2000)
 
-  if typ == 'blur':
+  if typ == 'gaussianblur':
     ctrl('y', values=[0,1,3,5,7,9,11,13,15,17,19])
     ctrl('x', values=[0,1,3,5,7,9,11,13,15,17,19])
     ctrl('sigma-x', 10)
     ctrl('sigma-y', 10)
+
+  if typ == 'threshold':
+    ctrl('value', 255)
+    ctrl('max', 255)
+    ctrl('method', values=[cv2.THRESH_BINARY,cv2.THRESH_BINARY_INV,cv2.THRESH_TRUNC,cv2.THRESH_TOZERO,cv2.THRESH_TOZERO_INV,cv2.THRESH_MASK])
+
+  if typ == 'dilate':
+    ctrl('kernel', 20)
+    ctrl('iterations', 10)
+
+  if typ == 'contours':
+    ctrl('mode', values=[cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL])
+    ctrl('method', values=[cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
+    ctrl('drawlines', values=[False,True])
+    ctrl('drawboxes', values=[False,True])
+    ctrl('linethickness', values=[-1,0,1,2,3,4,5])
+    ctrl('minsize', 4000)
+
+  if typ == 'canny':
+    ctrl('threshold1', 500)
+    ctrl('threshold2', 500)
+
+  if typ == 'blur':
+    ctrl('x', 5)
+    ctrl('y', 5)
+
+  if typ == 'lerp-result':
+    ctrl('factor', 2000)
+
 
   #   addParamTrackbar(winid, params, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
   #   addParamTrackbar(winid, params, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])

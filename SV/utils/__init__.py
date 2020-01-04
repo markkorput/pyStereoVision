@@ -22,11 +22,10 @@ def addParamTrackbar(winid, params, param, max=None, initialValue=None, valuePro
     factor (float): a multiplier/division value
   '''
 
+  if param in params:
+    default = params[param] 
   if isNone(default):
-    if param in params:
-      default = params[param] 
-    else:
-      default = 0
+    default = 0
 
   if factor:
     max = factor
@@ -37,7 +36,7 @@ def addParamTrackbar(winid, params, param, max=None, initialValue=None, valuePro
     max = len(values)-1
     valueProc = lambda v: values[v]
     if initialValue == None:
-      initialValue = values.index(default)
+      initialValue = values.index(default) if default in values else values[0]
       # print("{} int val: {} for def: {} in values: {}".format(param, initialValue, default, values))
 
   if not readProc:
