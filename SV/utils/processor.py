@@ -10,16 +10,27 @@ def create_processor(data):
   typ = data['type'] if 'type' in data else None
   
   def enhance(func):
+    '''
+    enhances a function with verbosity (logging) and enabled options
+    '''
     verbose = data['verbose'] if 'verbose' in data else False
     enabled = not ('enabled' in data and data['enabled'] == False)
 
+    # this finalfunc wraps around the given func, adding 'enabled' and 'verbose' options
     def finalfunc(frame):
+      # if not enabled, no processing to the frame is required, just return the original frame
       if not enabled: return frame
+      # verbosity: log processor activity
       if verbose: print('[fx] {}'.format(typ))
       return func(frame)
+
     return finalfunc
 
   def select(val, values, aliases=[]):
+    '''
+    Selects (returns) one of the givens values based on the specified val, which can be either an
+    index, or an alias value (if aliases are specified)
+    '''
     if val in aliases:
       val = aliases.index(val)
     elif type(val) == type('') and val.isdigit():
@@ -117,10 +128,15 @@ def create_processor(data):
           if minsize == 0 or (bw*bh) >= minsize:
             frame = cv2.rectangle(frame,(bx,by),(bx+bw,by+bh),(255,255,0),linethickness)
       return frame
-
     return enhance(func)
 
-  return None
+
+  if typ == 'canny':
+    threshold1 = select_int(data['threshold1'] if 'threshold1' in data else 0, max=500)
+    threshold2 = select_int(data['threshold2'] if 'threshold2' in data else 82, max=500)
+    def func(frame):
+      return cv2.Canny(frame, threshold1, threshold2)
+    return enhance(func)
 
 def create_processor_from_data(data):
   '''
