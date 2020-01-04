@@ -1,6 +1,6 @@
 from optparse import OptionParser
 import cv2
-from .utils.processor import create_processor_from_json_file
+from .utils.processor import create_controlled_processor_from_json_file, create_processor_from_json_file
 
 if __name__ == '__main__':
   # parse command line arguments
@@ -20,7 +20,11 @@ if __name__ == '__main__':
   # print('Opening videocapture for: {}'.format(opts.input))
   iscam = opts.input.isdigit()
   capture = cv2.VideoCapture(int(opts.input) if iscam else opts.input)
-  processor = create_processor_from_json_file(opts.config_file)
+
+  # processor = create_processor_from_json_file(opts.config_file)
+  processor = create_controlled_processor_from_json_file(opts.config_file, winid='Image Processors')
+
+
 
   isDone = False
   try:

@@ -7,7 +7,7 @@ def isNone(var):
   '''
   return type(var) == type(None)
 
-def addParamTrackbar(winid, params, param, max=None, initialValue=None, valueProc=None, values=None, factor=None, readProc=None):
+def addParamTrackbar(winid, params, param, max=None, initialValue=None, valueProc=None, values=None, factor=None, readProc=None, onChange=None, controlId=None, default=None):
   '''
   Convenience method for param manipulating trackbars
 
@@ -22,6 +22,12 @@ def addParamTrackbar(winid, params, param, max=None, initialValue=None, valuePro
     factor (float): a multiplier/division value
   '''
 
+  if isNone(default):
+    if param in params:
+      default = params[param] 
+    else:
+      default = 0
+
   if factor:
     max = factor
     valueProc = lambda v: float(v) / factor
@@ -30,14 +36,20 @@ def addParamTrackbar(winid, params, param, max=None, initialValue=None, valuePro
   if values:
     max = len(values)-1
     valueProc = lambda v: values[v]
-    initialValue = values.index(params[param])
+    if initialValue == None:
+      initialValue = values.index(default)
+      # print("{} int val: {} for def: {} in values: {}".format(param, initialValue, default, values))
 
   if not readProc:
     readProc = lambda v: int(v)
 
   def onValue(val):
     params[param] = valueProc(val) if valueProc else val
-  cv2.createTrackbar(param, winid, initialValue if initialValue != None else readProc(params[param]), max, onValue)
+    if onChange:
+      onChange()
+
+  val = initialValue if initialValue != None else readProc(params[param] if param in params else default)
+  cv2.createTrackbar(controlId if controlId else param, winid, val, max, onValue)
 
 
 def createParamsGuiWin(winid, params, file=None, load=None, save=None):

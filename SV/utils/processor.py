@@ -1,6 +1,42 @@
 import os, logging, json
 import cv2
 import numpy as np
+from SV.utils import addParamTrackbar
+
+def _get_data_from_json_file(filepath):
+  '''
+  Tries to load json data form the specified filepath.
+  In case of failure, None is returned.
+  '''
+
+  # config file exists?
+  if not os.path.isfile(filepath):
+    return None
+
+  # read file content
+  text = None
+  with open(filepath, "r") as f:
+      text = f.read()
+
+  # parse json
+  data = None
+  try:
+    data = json.loads(text)
+  except json.decoder.JSONDecodeError as err:
+    logging.warning('Could not load calibration json: \n{}'.format(err))
+    return None
+
+  return data
+
+def _create_wrapping_processor(funcs):
+  def wrapping_func(frame):
+    f = frame
+    for func in funcs:
+      f = func(f)
+    return f
+
+  # return wrapping processor func
+  return wrapping_func
 
 def create_processor(data):
   '''
@@ -108,8 +144,6 @@ def create_processor(data):
 
     return enhance(func)
 
-
-
   if typ == 'contours':     
     mode = select(data['mode'] if 'mode' in data else 0, [cv2.RETR_EXTERNAL, cv2.RETR_LIST, cv2.RETR_CCOMP, cv2.RETR_TREE, cv2.RETR_FLOODFILL], aliases=['RETR_EXTERNAL', 'RETR_LIST', 'RETR_CCOMP', 'RETR_TREE', 'RETR_FLOODFILL'])
     method = select(data['method'] if 'method' in data else 0, [cv2.CHAIN_APPROX_NONE,cv2.CHAIN_APPROX_SIMPLE,cv2.CHAIN_APPROX_TC89_L1,cv2.CHAIN_APPROX_TC89_KCOS])
@@ -153,14 +187,7 @@ def create_processor_from_data(data):
       processors.append(p)
 
   # create wrapping processor which runs individual processors in sequence
-  def processor_func(frame):
-    f = frame
-    for p in processors:
-      f = p(f)
-    return f
-
-  # return wrapping processor func
-  return processor_func
+  return _create_wrapping_processor(processors)
 
 def create_processor_from_json_file(filepath):
   '''
@@ -168,22 +195,87 @@ def create_processor_from_json_file(filepath):
   Then uses the create_processor_from_data method to create the processor and returns it to the caller.
   If any of these steps fail, None is returned.
   '''
+  data = _get_data_from_json_file(filepath)
+  return None if data == None else create_processor_from_data(data)
 
-  # config file exists?
-  if not os.path.isfile(filepath):
-    return None
 
-  # read file content
-  text = None
-  with open(filepath, "r") as f:
-      text = f.read()
+class FuncWrapper:
+  def __init__(self, func):
+    self.func = func
 
-  # parse json
-  data = None
-  try:
-    data = json.loads(text)
-  except json.decoder.JSONDecodeError as err:
-    logging.warning('Could not load calibration json: \n{}'.format(err))
-    return None
+  def run(self, frame):
+    return self.func(frame) if self.func else frame
 
-  return create_processor_from_data(data)
+  __call__ = run
+
+def create_controlled_processor(winid, idx, data):
+  original_processor = create_processor(data)
+  processor = FuncWrapper(original_processor)
+
+  def update_processor():
+    processor.func = create_processor(data)
+
+  typ = data['type'] if 'type' in data else None
+
+  def ctrl(param, max=None, initialValue=None, valueProc=None, values=None, factor=None, readProc=None, default=None):
+    addParamTrackbar(winid, data, param,
+      max=max,
+      initialValue=initialValue,
+      valueProc=valueProc,
+      values=values,
+      factor=factor,
+      readProc=readProc,
+      onChange=update_processor,
+      controlId='{}_{}-{}'.format(idx, typ, param),
+      default=default)
+  
+  # print('create_controlled_processor: {}'.format(data))
+
+  ctrl('enabled', values=[False, True], default=True)
+  ctrl('verbose', values=[False, True], default=False)
+
+  typ = data['type'] if 'type' in data else None
+  # if typ == 'grayscale':
+  #   pass    
+
+  # if typ == 'invert':
+  #   pass    
+
+  if typ == 'blur':
+    ctrl('y', values=[0,1,3,5,7,9,11,13,15,17,19])
+    ctrl('x', values=[0,1,3,5,7,9,11,13,15,17,19])
+    ctrl('sigma-x', 10)
+    ctrl('sigma-y', 10)
+
+  #   addParamTrackbar(winid, params, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
+  #   addParamTrackbar(winid, params, 'blur-y', values=[0,1,3,5,7,9,11,13,15,17,19])
+  #   addParamTrackbar(winid, params, 'blur-sigma-x', 10)
+  #   addParamTrackbar(winid, params, 'blur-sigma-y', 10)
+  return processor
+
+def create_controlled_processor_from_data(data, winid='Processors'):
+    # create window    
+    cv2.namedWindow(winid, cv2.WINDOW_NORMAL)
+    # cv2.moveWindow(winid, 5, 5 + 400*idx)
+    # cv2.resizeWindow(winid, 500,400)
+    # cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+    cv2.setWindowProperty(winid,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_NORMAL)
+
+    # create controls and processors
+    processors = []
+    items = data['processors'] if 'processors' in data else []
+    for idx, processor_data in enumerate(items):
+      processors.append(create_controlled_processor(winid, idx, processor_data))
+
+    return _create_wrapping_processor(processors)
+
+def create_controlled_processor_from_json_file(filepath, winid='Processors'):
+  '''
+  Tries to load json data form the specified filepath.
+  Then uses the create_processor_from_data method to create the processor and returns it to the caller.
+  If any of these steps fail, None is returned.
+  '''
+  data = _get_data_from_json_file(filepath)
+  return None if data == None else create_controlled_processor_from_data(data, winid=winid)
+
+  
