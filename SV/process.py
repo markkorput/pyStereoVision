@@ -8,12 +8,6 @@ if __name__ == '__main__':
 
   parser.add_option('-i', '--input', dest='input', default='saved-media/studio-test01-L-short.mp4')
   parser.add_option('-c', '--config-file', dest='config_file', default='data/process.json')
-  # parser.add_option('-s', '--start', dest='start', default='10:15')
-  # parser.add_option('-e', '--end', dest='end', default='21:45')
-  # parser.add_option('-i', '--interval', dest='interval', default=10, type="float")
-  # parser.add_option('-c', '--count', dest='count', default=None, type="int") # s
-  # parser.add_option('-o', '--once', dest='once', action="store_true", default=False)
-  # parser.add_option('-v', '--verbose', dest='verbose', action="store_true", default=False)
 
   opts, args = parser.parse_args()
 
@@ -23,8 +17,6 @@ if __name__ == '__main__':
 
   # processor = create_processor_from_json_file(opts.config_file)
   processor = create_controlled_processor_from_json_file(opts.config_file, winid='Image Processors')
-
-
 
   isDone = False
   try:
@@ -44,12 +36,6 @@ if __name__ == '__main__':
       key = cv2.waitKey(20) & 0xFF
       if key == 27 or key == ord('q'): # escape or Q
         isDone = True
-
-      # if key == ord(' '):
-      #   isPaused = not isPaused
-
-      # if key == ord('s'):
-      #   saveframe = True
 
       if key == ord('r'):
         # captureRef = True
