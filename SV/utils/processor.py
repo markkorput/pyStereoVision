@@ -29,10 +29,10 @@ def _get_data_from_json_file(filepath):
   return data
 
 def _create_wrapping_processor(funcs):
-  def wrapping_func(frame):
+  def wrapping_func(frame, opts={}):
     f = frame
     for func in funcs:
-      f = func(f)
+      f = func(f, opts)
     return f
 
   # return wrapping processor func
@@ -53,12 +53,12 @@ def create_processor(data):
     enabled = not ('enabled' in data and data['enabled'] == False)
 
     # this finalfunc wraps around the given func, adding 'enabled' and 'verbose' options
-    def finalfunc(frame):
+    def finalfunc(frame, opts={}):
       # if not enabled, no processing to the frame is required, just return the original frame
       if not enabled: return frame
       # verbosity: log processor activity
       if verbose: print('[fx] {}'.format(typ))
-      return func(frame)
+      return func(frame, opts)
 
     return finalfunc
 
@@ -87,20 +87,28 @@ def create_processor(data):
       return max
     return val
 
+  def select_float(val, min=None, max=None):
+    val = float(val)
+    if min != None and val < min:
+      return min
+    if max != None and val > max:
+      return max
+    return val
+
   if typ == 'grayscale':
-    def func(f):
+    def func(f, opts={}):
       return cv2.cvtColor(f,cv2.COLOR_BGR2GRAY)
     return enhance(func)
 
   if typ == 'invert':
-    def func(f):
+    def func(f, opts={}):
       return 255-f
     return enhance(func)
 
   if typ == 'blur':
     x = max(data['x'] if 'x' in data else 1, 1)
     y = max(data['y'] if 'y' in data else 1, 1)
-    def func(f):
+    def func(f, opts={}):
       return cv2.Blur(f, (x,y))
     return enhance(func)
 
@@ -110,7 +118,7 @@ def create_processor(data):
     sx = data['sigma-x'] if 'sigma-x' in data else 10
     sy = data['sigma-y'] if 'sigma-y' in data else 10
 
-    def func(f):
+    def func(f, opts={}):
       return cv2.GaussianBlur(f, (x,y), sx,sy)
     return enhance(func)
 
@@ -135,7 +143,7 @@ def create_processor(data):
         typeno = 0
       threshold_type = types[typeno]
 
-    def func(frame):
+    def func(frame, opts={}):
       ret,f = cv2.threshold(frame, value, mx, threshold_type if threshold_type else cv2.CHAIN_APPROX_NONE)
       return f
     return enhance(func)
@@ -146,7 +154,7 @@ def create_processor(data):
     iters = data['iterations'] if 'iterations' in data else 3
     kernel = np.ones((val, val),np.uint8)
 
-    def func(frame):
+    def func(frame, opts={}):
       return cv2.dilate(frame, kernel, iterations=iters)
 
     return enhance(func)
@@ -159,7 +167,7 @@ def create_processor(data):
     drawboxes = data['drawboxes'] if 'drawboxes' in data else False
     minsize = select_int(data['minsize'] if 'minsize' in data else 0, max=4000)
 
-    def func(frame):
+    def func(frame, opts={}):
       contours,hierarchy = cv2.findContours(frame, mode, method)
       if drawlines:
         frame = cv2.drawContours(frame,contours,-1,(255,255,0),linethickness)
@@ -175,8 +183,16 @@ def create_processor(data):
   if typ == 'canny':
     threshold1 = select_int(data['threshold1'] if 'threshold1' in data else 0, max=500)
     threshold2 = select_int(data['threshold2'] if 'threshold2' in data else 82, max=500)
-    def func(frame):
+    def func(frame, opts={}):
       return cv2.Canny(frame, threshold1, threshold2)
+    return enhance(func)
+
+  if typ == 'add':
+    factor = select_float(data['factor'] if 'factor' in data else 1.0, max=10.0)
+    def func(f, opts={}):
+      if not 'base' in opts: return f
+      return opts['base'] + f * factor
+
     return enhance(func)
 
 def create_processor_from_data(data):
@@ -210,8 +226,8 @@ class FuncWrapper:
   def __init__(self, func):
     self.func = func
 
-  def run(self, frame):
-    return self.func(frame) if self.func else frame
+  def run(self, frame, opts={}):
+    return self.func(frame, opts) if self.func else frame
 
   __call__ = run
 
@@ -279,6 +295,10 @@ def create_controlled_processor(winid, idx, data):
 
   if typ == 'lerp-result':
     ctrl('factor', 2000)
+
+  if typ=='add':
+    ctrl('factor', max=1000, initialValue=1, valueProc=lambda x: (x/100.0)-100.0)
+
 
 
   #   addParamTrackbar(winid, params, 'blur-x', values=[0,1,3,5,7,9,11,13,15,17,19])
